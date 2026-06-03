@@ -19,6 +19,10 @@ export default defineConfig({
       { text: 'Guide', link: '/guide/quickstart' },
       { text: 'Design', link: '/guide/design' },
       { text: 'CLI', link: '/guide/cli' },
+      { text: 'GitHub', link: 'https://github.com/mostlydev/nit' },
+    ],
+    socialLinks: [
+      { icon: 'github', link: 'https://github.com/mostlydev/nit' },
     ],
     sidebar: [
       {
@@ -28,6 +32,7 @@ export default defineConfig({
           { text: 'Concepts', link: '/guide/concepts' },
           { text: 'CLI', link: '/guide/cli' },
           { text: 'Design', link: '/guide/design' },
+          { text: 'Implementation', link: '/guide/implementation' },
         ],
       },
     ],
@@ -39,4 +44,3 @@ export default defineConfig({
     },
   },
 })
-

@@ -5,6 +5,16 @@ only when the operation is a new workspace-level concept.
 
 ```sh
 nit init
+nit adopt <path>...
+nit status
+nit doctor
+nit update --dry-run
+```
+
+The implemented CLI is currently a skeleton. The intended full surface is:
+
+```sh
+nit init
 nit clone <workspace-url> [path] [--pin <pin>]
 nit adopt <path>... [--id <id>] [--no-commit]
 nit import-submodule <path> [--id <id>]
@@ -31,3 +41,6 @@ nit review <change|pin>
 human workflow uses `nit land` because forgetting `--pin` changes the meaning of
 the operation.
 
+`nit update` follows the release installer path and is the explicit update
+command. Official release builds may also self-update transparently after a
+verified release check.

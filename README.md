@@ -11,6 +11,9 @@ It defines the v1 primitives:
 - **Checkout**: safe materialization of a Pin across the workspace.
 - **Review**: a combined review artifact for a Change or Pin.
 
+The CLI implementation is Rust. The current roadmap is in
+[docs/planning/implementation-roadmap.md](docs/planning/implementation-roadmap.md).
+
 The public documentation site is live at **https://mostlydev.github.io/nit/**.
 It lives in [site/](site/) as a VitePress site and redeploys via
 [.github/workflows/deploy-site.yml](.github/workflows/deploy-site.yml) on every
@@ -39,3 +42,10 @@ npm run dev
 If the site is deployed as a GitHub Pages project site instead of a custom
 domain, set `VITEPRESS_BASE=/<repo-name>/` for the build.
 
+## CLI Development
+
+```sh
+cargo test
+cargo run -- doctor
+cargo run -- status
+```

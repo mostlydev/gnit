@@ -12,6 +12,9 @@ hero:
     - theme: alt
       text: Design Notes
       link: /guide/design
+    - theme: alt
+      text: GitHub
+      link: https://github.com/mostlydev/nit
 
 features:
   - title: Keep Git
@@ -23,4 +26,3 @@ features:
   - title: Review Together
     details: nit review builds one cross-repo artifact for a Change or Pin.
 ---
-

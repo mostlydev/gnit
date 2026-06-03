@@ -4,7 +4,7 @@
 
 Converged v1/v2 design after adversarial review with Claude and Codex.
 
-The product name candidate is **Nit**: a small Git-native layer for knitting
+The product name is **Nit**: a small Git-native layer for knitting
 multiple independent repositories into one understandable workspace. The old
 `legit_design.md` governance plan is not discarded, but it is no longer v1.
 Governance becomes v2 on top of the v1 primitives.
@@ -17,7 +17,7 @@ The v1 goal is:
 The operator answered the remaining design questions:
 
 - Pinning is core, not a minority add-on.
-- The name candidate is `nit`.
+- The command name is `nit`.
 - This file should hold the v1 plan plus the v2 governance path.
 
 ---
@@ -1206,7 +1206,7 @@ regime to use Nit safely.
 
 ## CLI Surface
 
-Name in commands uses the candidate product name:
+Commands use the product name:
 
 ```text
 # setup / construction  (new members: use plain `git init`/`git clone`, then `nit adopt`)

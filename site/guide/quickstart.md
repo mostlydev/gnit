@@ -1,7 +1,8 @@
 # Quickstart
 
-Nit is currently a design, not an implemented CLI. This page describes the
-intended day-one workflow.
+Nit has an early Rust CLI for workspace creation, adoption, status, diagnosis,
+and explicit updates. The full publish workflow below is the intended day-one
+surface as the remaining verbs land.
 
 ## Create A Workspace
 
@@ -37,4 +38,3 @@ nit clone git@github.com:example/product-workspace.git product --pin baseline
 
 `nit clone` clones the control repo and hydrates member repos from the roster.
 With `--pin`, it also materializes the selected Pin.
-

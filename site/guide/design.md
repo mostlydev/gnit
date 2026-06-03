@@ -11,8 +11,9 @@ The locked decisions are recorded in `docs/decisions/`:
 - Hooks are not installed by default.
 - The public site deploys from `site/` on pushes to `master` once GitHub Pages is
   configured.
+- The CLI is Rust, distributed as a single binary, with Clawdapus-style
+  install/update/release ergonomics.
 
 The central principle is reconstruct-not-enforce: Git remains the source of
 truth, and Nit rebuilds the workspace graph from ordinary Git commits, trailers,
 the roster, and Pin artifacts.
-
