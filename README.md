@@ -14,6 +14,47 @@ It defines the v1 primitives:
 The CLI implementation is Rust. The current roadmap is in
 [docs/planning/implementation-roadmap.md](docs/planning/implementation-roadmap.md).
 
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mostlydev/nit/master/install.sh | sh
+```
+
+This downloads the latest release for your platform, verifies its SHA-256
+checksum, and installs `nit` to `~/.local/bin` (override with `NIT_INSTALL_DIR`).
+It requires `git` and `curl`. Verify the install with:
+
+```sh
+nit doctor
+```
+
+Update later with `nit update`, which re-runs the verified installer. Nit never
+auto-updates; it only updates when you ask.
+
+## Quickstart
+
+```sh
+# Turn a directory of related repos into one workspace.
+cd my-workspace
+nit init                 # or: nit init --control  (when there is no root repo)
+nit adopt app sdk infra  # register existing repos as members (each a repo root)
+
+# Make one change across several repos.
+nit add app/src sdk/src  # stage paths across members (or: nit add -A)
+nit commit -m "Wire the new field end to end"   # one Nit-Change-Id across repos
+nit push                 # publish member commits (members first, then any pin)
+
+# Or publish a reproducible snapshot (a Pin) in one step.
+nit land -m "Release the new field"   # commit + pin together
+nit push
+
+nit status               # members, staged changes, pin drift
+nit change show <id>     # the commits that make up a change
+```
+
+See the [full guide](https://mostlydev.github.io/nit/) for pins, checkout,
+review, and the design rationale.
+
 The public documentation site is live at **https://mostlydev.github.io/nit/**.
 It lives in [site/](site/) as a VitePress site and redeploys via
 [.github/workflows/deploy-site.yml](.github/workflows/deploy-site.yml) on every
@@ -24,6 +65,9 @@ push to `master` that touches `site/**` or the workflow. The build sets
 ## Repository Layout
 
 ```text
+src/                Rust CLI implementation.
+tests/              CLI integration tests.
+install.sh          Release installer (used by `nit update`).
 docs/
   decisions/        Locked product and design decisions.
   planning/         Design plans and archived drafts.

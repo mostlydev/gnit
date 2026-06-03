@@ -72,3 +72,17 @@ pub fn root(dir: &Path) -> Option<PathBuf> {
         .ok()
         .map(|out| PathBuf::from(out.trim()))
 }
+
+/// True only when `dir` is the ROOT of a Git repository, not merely a path
+/// inside one. `is_git_repo` (rev-parse --is-inside-work-tree) returns true for
+/// any subdirectory of a repo, so adopting a plain subdir would wrongly succeed;
+/// this compares the canonical toplevel to the canonical path.
+pub fn is_git_repo_root(dir: &Path) -> bool {
+    let Some(top) = root(dir) else {
+        return false;
+    };
+    match (top.canonicalize(), dir.canonicalize()) {
+        (Ok(top), Ok(dir)) => top == dir,
+        _ => false,
+    }
+}

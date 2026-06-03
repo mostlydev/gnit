@@ -245,6 +245,18 @@ fn commit_change_and_land_workflow_records_shared_history() {
     .stdout(predicate::str::contains("created Pin PIN-"));
 }
 
+#[test]
+fn adopt_rejects_plain_subdirectory() {
+    let fixture = clean_workspace_with_sdk();
+    let workspace = fixture.root.as_path();
+    // A plain subdirectory of the root repo is not its own repository; adopting
+    // it must fail rather than register a non-repo path as a member.
+    std::fs::create_dir_all(workspace.join("plainsub")).unwrap();
+    nit(workspace, ["adopt", "plainsub"])
+        .failure()
+        .stderr(predicate::str::contains("not a repository root"));
+}
+
 fn git<const N: usize>(dir: &Path, args: [&str; N]) {
     let status = std::process::Command::new("git")
         .current_dir(dir)

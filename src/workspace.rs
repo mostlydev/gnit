@@ -48,7 +48,13 @@ pub fn adopt(paths: Vec<PathBuf>, id: Option<String>, no_commit: bool) -> Result
 
     for path in paths {
         let abs = absolutize(&cwd, &path);
-        if !git::is_git_repo(&abs) {
+        if !git::is_git_repo_root(&abs) {
+            if git::is_git_repo(&abs) {
+                bail!(
+                    "{} is a subdirectory of a Git repo, not a repository root; adopt the repo itself",
+                    path.display()
+                );
+            }
             bail!("{} is not a Git repository", path.display());
         }
 

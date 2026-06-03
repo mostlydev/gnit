@@ -12,6 +12,10 @@ use clap::Parser;
 use cli::{ChangeCommands, Cli, Commands};
 
 fn main() -> Result<()> {
+    // Reset SIGPIPE to default so piping into `head`/`less` (closed early) exits
+    // quietly like git/grep, instead of panicking with "Broken pipe".
+    sigpipe::reset();
+
     let cli = Cli::parse();
 
     if !cli.no_upkeep && !matches!(cli.command, Commands::Update { .. }) {
