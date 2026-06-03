@@ -42,18 +42,25 @@ nit adopt app sdk infra  # register existing repos as members (each a repo root)
 # Make one change across several repos.
 nit add app/src sdk/src  # stage paths across members (or: nit add -A)
 nit commit -m "Wire the new field end to end"   # one Nit-Change-Id across repos
-nit push                 # publish member commits (members first, then any pin)
+nit push                 # publish members first, then workspace metadata
 
 # Or publish a reproducible snapshot (a Pin) in one step.
 nit land -m "Release the new field"   # commit + pin together
 nit push
 
-nit status               # members, staged changes, pin drift
+nit status               # workspace and members
 nit change show <id>     # the commits that make up a change
+nit review <id-or-pin>   # combined review artifact
 ```
 
-See the [full guide](https://mostlydev.github.io/nit/) for pins, checkout,
-review, and the design rationale.
+Reconstruct the workspace on another machine:
+
+```sh
+nit clone git@github.com:example/product-workspace.git product --pin baseline
+```
+
+See the [full guide](https://mostlydev.github.io/nit/) for clone, pins,
+checkout, review, and the design rationale.
 
 The public documentation site is live at **https://mostlydev.github.io/nit/**.
 It lives in [site/](site/) as a VitePress site and redeploys via

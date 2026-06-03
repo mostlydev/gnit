@@ -12,12 +12,11 @@ Nit has two co-primary v1 primitives:
   trailer.
 - **Pin** records an exact, committed, reproducible cross-repo snapshot.
 
-`nit checkout <pin>` materializes a Pin. `nit log` reconstructs the shared graph
-from Change trailers and Pin artifacts.
+`nit checkout <pin>` materializes a Pin. `nit change log` reconstructs the
+shared graph from Change trailers.
 
 ## Rationale
 
 Change answers "which commits belong together?" Pin answers "which exact commits
 should this workspace materialize?" Submodules collapse these concerns into
 manual parent pointer updates; Nit keeps them explicit.
-

@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use anyhow::bail;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
@@ -15,6 +16,8 @@ pub struct Roster {
     pub remote: Option<String>,
     #[serde(default)]
     pub members: Vec<RosterMember>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ignored: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -34,6 +37,7 @@ impl Roster {
             mode: mode.into(),
             remote,
             members: Vec::new(),
+            ignored: Vec::new(),
         }
     }
 
@@ -120,6 +124,41 @@ impl Pin {
         let text = serde_yaml::to_string(self).context("serialize pin")?;
         fs::write(&path, text).with_context(|| format!("write pin {}", path.display()))?;
         Ok(path)
+    }
+
+    pub fn load(root: &Path, spec: &str) -> Result<Self> {
+        let direct = Self::path(root, spec);
+        if direct.exists() {
+            return Self::read(root, spec);
+        }
+
+        let pins_dir = root.join(PINS_DIR);
+        if !pins_dir.exists() {
+            bail!("pin {spec} not found");
+        }
+        let mut matches = Vec::new();
+        for entry in
+            fs::read_dir(&pins_dir).with_context(|| format!("read {}", pins_dir.display()))?
+        {
+            let path = entry?.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("yaml") {
+                continue;
+            }
+            let id = path
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .context("pin filename is not utf-8")?;
+            let pin = Self::read(root, id)?;
+            if pin.id == spec || pin.label.as_deref() == Some(spec) {
+                matches.push(pin);
+            }
+        }
+
+        match matches.len() {
+            0 => bail!("pin {spec} not found"),
+            1 => Ok(matches.remove(0)),
+            _ => bail!("pin label {spec} is ambiguous"),
+        }
     }
 }
 

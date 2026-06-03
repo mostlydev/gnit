@@ -20,6 +20,16 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
+    /// Clone a Nit workspace and hydrate its member repos.
+    Clone {
+        /// Workspace/root repository URL.
+        url: String,
+        /// Destination path. Defaults to the repository name.
+        path: Option<PathBuf>,
+        /// Materialize this Pin after cloning.
+        #[arg(long)]
+        pin: Option<String>,
+    },
     /// Stage paths across workspace members.
     Add {
         /// Stage all changes in the workspace.
@@ -77,6 +87,20 @@ pub enum Commands {
         #[arg(long)]
         no_commit: bool,
     },
+    /// Exclude non-member paths from the workspace root.
+    Ignore {
+        /// Paths to ignore in the root repo.
+        #[arg(required = true)]
+        paths: Vec<PathBuf>,
+    },
+    /// Convert a tracked Git submodule into a Nit member.
+    ImportSubmodule {
+        /// Submodule path.
+        path: PathBuf,
+        /// Member id.
+        #[arg(long)]
+        id: Option<String>,
+    },
     /// Diagnose the Nit installation and current workspace.
     Doctor,
     /// Show the current Nit workspace state.
@@ -102,6 +126,11 @@ pub enum Commands {
         /// Retry the ordered push after a previous failure.
         #[arg(long)]
         resume: bool,
+    },
+    /// Render a combined review artifact for a Change or Pin.
+    Review {
+        /// Change id or Pin id/label.
+        target: String,
     },
     /// Update the nit binary from the latest GitHub release.
     Update {

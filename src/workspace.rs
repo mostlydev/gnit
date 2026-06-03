@@ -112,12 +112,74 @@ pub fn doctor() -> Result<()> {
     match find_nit_workspace(env::current_dir()?.as_path()) {
         Some(root) => {
             println!("  workspace: {}", root.display());
-            println!("  roster members: {}", Roster::read(&root)?.members.len());
+            let roster = Roster::read(&root)?;
+            println!("  roster members: {}", roster.members.len());
+            repair_required_excludes(&root, &roster)?;
+            println!("  exclude repair: ok");
+            report_member_health(&root, &roster)?;
+            report_pin_health(&root)?;
         }
         None => println!("  workspace: not found"),
     }
 
     println!("  upkeep: automatic non-destructive upkeep enabled");
+    Ok(())
+}
+
+pub fn ignore(paths: Vec<PathBuf>) -> Result<()> {
+    if paths.is_empty() {
+        bail!("nothing specified; use `nit ignore <path>...`");
+    }
+    let cwd = env::current_dir()?;
+    let root = find_nit_workspace(&cwd).context("not in a Nit workspace; run `nit init` first")?;
+    let mut roster = Roster::read(&root)?;
+    for path in paths {
+        let rel = relative_to(&root, &absolutize(&cwd, &path))?;
+        let entry = rel.to_string_lossy().to_string();
+        if !roster.ignored.iter().any(|ignored| ignored == &entry) {
+            roster.ignored.push(entry);
+        }
+    }
+    roster.write(&root)?;
+    repair_required_excludes(&root, &roster)?;
+    commit_metadata(&root, "Update Nit ignored paths").ok();
+    println!("updated ignored paths");
+    Ok(())
+}
+
+pub fn import_submodule(path: PathBuf, id: Option<String>) -> Result<()> {
+    let cwd = env::current_dir()?;
+    let root = find_nit_workspace(&cwd).context("not in a Nit workspace; run `nit init` first")?;
+    let abs = absolutize(&cwd, &path);
+    let rel = relative_to(&root, &abs)?;
+    let rel_text = rel.to_string_lossy().to_string();
+    let status = git::output_in(&root, ["status", "--porcelain", "--untracked-files=no"])?;
+    if !status.trim().is_empty() {
+        bail!("root has tracked changes; commit or stash them before import-submodule");
+    }
+    let stage = git::output_in_args(&root, ["ls-files", "--stage", "--", rel_text.as_str()])?;
+    if !stage.starts_with("160000 ") {
+        bail!("{} is not a tracked Git submodule", path.display());
+    }
+
+    git::output_in_args(&root, ["rm", "--cached", rel_text.as_str()])?;
+    let section = format!("submodule.{rel_text}");
+    git::output_in_args(
+        &root,
+        ["config", "-f", ".gitmodules", "--remove-section", &section],
+    )
+    .ok();
+
+    adopt(vec![path], id, true)?;
+    git::output_in(&root, ["add", ".nit"])?;
+    if root.join(".gitmodules").exists() {
+        git::output_in(&root, ["add", ".gitmodules"])?;
+    }
+    git::output_in(
+        &root,
+        ["commit", "-m", &format!("Import Nit member {rel_text}")],
+    )?;
+    println!("imported submodule {rel_text}");
     Ok(())
 }
 
@@ -177,12 +239,77 @@ pub(crate) fn repair_required_excludes(root: &Path, roster: &Roster) -> Result<(
     let mut text = fs::read_to_string(&exclude).unwrap_or_default();
     for member in &roster.members {
         for entry in &member.required_excludes {
-            if !text.lines().any(|line| line == entry) {
-                text.push_str(&format!("{entry}\n"));
+            append_exclude(&mut text, entry);
+        }
+    }
+    for entry in &roster.ignored {
+        append_exclude(&mut text, entry);
+    }
+    fs::write(exclude, text).context("write git exclude")
+}
+
+fn append_exclude(text: &mut String, entry: &str) {
+    if text.lines().any(|line| line == entry) {
+        return;
+    }
+    if !text.is_empty() && !text.ends_with('\n') {
+        text.push('\n');
+    }
+    text.push_str(entry);
+    text.push('\n');
+}
+
+fn report_member_health(root: &Path, roster: &Roster) -> Result<()> {
+    for member in &roster.members {
+        let member_root = root.join(&member.path);
+        if !member_root.exists() {
+            println!("  member {}: missing", member.id);
+            continue;
+        }
+        if !git::is_git_repo_root(&member_root) {
+            println!("  member {}: not a git repo", member.id);
+            continue;
+        }
+        if let Some(expected) = &member.remote {
+            let actual = git::output_in(&member_root, ["remote", "get-url", "origin"])
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            if !actual.is_empty() && actual != *expected {
+                println!("  member {}: remote drift", member.id);
             }
         }
     }
-    fs::write(exclude, text).context("write git exclude")
+    Ok(())
+}
+
+fn report_pin_health(root: &Path) -> Result<()> {
+    let pins_dir = root.join(crate::metadata::PINS_DIR);
+    if !pins_dir.exists() {
+        return Ok(());
+    }
+    for entry in fs::read_dir(&pins_dir)? {
+        let path = entry?.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("yaml") {
+            continue;
+        }
+        let Some(id) = path.file_stem().and_then(|stem| stem.to_str()) else {
+            continue;
+        };
+        let pin = crate::metadata::Pin::read(root, id)?;
+        for member in &pin.members {
+            let member_root = root.join(&member.path);
+            if member_root.exists()
+                && !git::status_in_args(
+                    &member_root,
+                    ["cat-file", "-e", &format!("{}^{{commit}}", member.commit)],
+                )?
+            {
+                println!("  pin {}: dangling {}", pin.id, member.id);
+            }
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn commit_metadata(root: &Path, message: &str) -> Result<()> {

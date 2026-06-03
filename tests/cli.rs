@@ -235,6 +235,16 @@ fn commit_change_and_land_workflow_records_shared_history() {
     let land = nit(workspace, ["land", "release", "-m", "Land sdk update"]);
     let landed_change = parse_created_change(&land);
 
+    nit(workspace, ["review", &landed_change])
+        .success()
+        .stdout(predicate::str::contains("Change"))
+        .stdout(predicate::str::contains("Land sdk update"));
+    nit(workspace, ["review", "release"])
+        .success()
+        .stdout(predicate::str::contains("Review Pin"))
+        .stdout(predicate::str::contains("Changes:"))
+        .stdout(predicate::str::contains(&landed_change));
+
     let pin_paths = std::fs::read_dir(workspace.join(".nit/pins"))
         .unwrap()
         .map(|entry| entry.unwrap().path())
@@ -265,6 +275,28 @@ fn adopt_rejects_plain_subdirectory() {
 }
 
 #[test]
+fn ignore_and_doctor_repair_root_excludes() {
+    let fixture = clean_workspace_with_sdk();
+    let workspace = fixture.root.as_path();
+
+    nit(workspace, ["ignore", "scratch"])
+        .success()
+        .stdout(predicate::str::contains("updated ignored paths"));
+    let roster = std::fs::read_to_string(workspace.join(".nit/roster.yaml")).unwrap();
+    assert!(roster.contains("ignored:"));
+    assert!(roster.contains("scratch"));
+
+    std::fs::write(workspace.join(".git/info/exclude"), "# reset by clone\n").unwrap();
+    nit(workspace, ["doctor"])
+        .success()
+        .stdout(predicate::str::contains("exclude repair: ok"));
+
+    let exclude = std::fs::read_to_string(workspace.join(".git/info/exclude")).unwrap();
+    assert!(exclude.lines().any(|line| line == "vendor/sdk"));
+    assert!(exclude.lines().any(|line| line == "scratch"));
+}
+
+#[test]
 fn push_and_checkout_workflow_reconstructs_missing_member() {
     let fixture = workspace_with_remotes();
     let workspace = fixture.root.as_path();
@@ -277,7 +309,10 @@ fn push_and_checkout_workflow_reconstructs_missing_member() {
     nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
     nit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
     nit(workspace, ["push"]).success();
-    nit(workspace, ["push", "--resume"]).success();
+    nit(workspace, ["push", "--resume"])
+        .success()
+        .stdout(predicate::str::contains("member sdk already pushed"))
+        .stdout(predicate::str::contains("workspace root already pushed"));
 
     let sdk_head = git_out(&workspace.join("vendor/sdk"), ["rev-parse", "HEAD"]);
     let root_head = git_out(workspace, ["rev-parse", "HEAD"]);
@@ -290,12 +325,28 @@ fn push_and_checkout_workflow_reconstructs_missing_member() {
         root_head.trim()
     );
 
-    let restored = fixture._temp.path().join("restored");
-    git_clone(&fixture.root_remote, &restored);
-    nit(&restored, ["checkout", "baseline"])
+    let root_remote = fixture.root_remote.to_str().unwrap();
+
+    let hydrated = fixture._temp.path().join("hydrated");
+    let hydrated_path = hydrated.to_str().unwrap();
+    nit(fixture._temp.path(), ["clone", root_remote, hydrated_path])
         .success()
         .stdout(predicate::str::contains("cloned sdk"))
-        .stdout(predicate::str::contains("checked out Pin"));
+        .stdout(predicate::str::contains("cloned Nit workspace"));
+    assert_eq!(
+        std::fs::read_to_string(hydrated.join("vendor/sdk/lib.rs")).unwrap(),
+        "pub fn sdk() -> &'static str { \"pushed\" }\n"
+    );
+
+    let restored = fixture._temp.path().join("restored");
+    let restored_path = restored.to_str().unwrap();
+    nit(
+        fixture._temp.path(),
+        ["clone", root_remote, restored_path, "--pin", "baseline"],
+    )
+    .success()
+    .stdout(predicate::str::contains("cloned sdk"))
+    .stdout(predicate::str::contains("checked out Pin"));
     assert_eq!(
         std::fs::read_to_string(restored.join("vendor/sdk/lib.rs")).unwrap(),
         "pub fn sdk() -> &'static str { \"pushed\" }\n"
@@ -312,7 +363,86 @@ fn push_and_checkout_workflow_reconstructs_missing_member() {
     );
 }
 
+#[test]
+fn import_submodule_workflow_converts_gitlink_to_member() {
+    let temp = tempfile::tempdir().unwrap();
+    let workspace = temp.path().join("workspace");
+    std::fs::create_dir(&workspace).unwrap();
+    git(&workspace, ["init"]);
+    git(&workspace, ["config", "user.email", "nit-test@example.com"]);
+    git(&workspace, ["config", "user.name", "Nit Test"]);
+    std::fs::write(workspace.join("README.md"), "root\n").unwrap();
+    git(&workspace, ["add", "README.md"]);
+    git(&workspace, ["commit", "-m", "Initial root"]);
+
+    let sub_source = temp.path().join("sub-source");
+    std::fs::create_dir(&sub_source).unwrap();
+    git(&sub_source, ["init"]);
+    git(
+        &sub_source,
+        ["config", "user.email", "nit-test@example.com"],
+    );
+    git(&sub_source, ["config", "user.name", "Nit Test"]);
+    std::fs::write(sub_source.join("lib.rs"), "pub fn sub() {}\n").unwrap();
+    git(&sub_source, ["add", "lib.rs"]);
+    git(&sub_source, ["commit", "-m", "Initial sub"]);
+
+    git_args(
+        &workspace,
+        &[
+            "-c",
+            "protocol.file.allow=always",
+            "submodule",
+            "add",
+            sub_source.to_str().unwrap(),
+            "vendor/sub",
+        ],
+    );
+    git(&workspace, ["commit", "-m", "Add submodule"]);
+    assert!(
+        git_out(&workspace, ["ls-files", "--stage", "vendor/sub"]).starts_with("160000 "),
+        "fixture should start with a gitlink"
+    );
+
+    nit(&workspace, ["init"]).success();
+    nit(
+        &workspace,
+        ["import-submodule", "vendor/sub", "--id", "sub"],
+    )
+    .success()
+    .stdout(predicate::str::contains("imported submodule vendor/sub"));
+
+    let roster = std::fs::read_to_string(workspace.join(".nit/roster.yaml")).unwrap();
+    assert!(roster.contains("id: sub"));
+    assert!(roster.contains("path: vendor/sub"));
+    assert!(roster.contains(sub_source.to_str().unwrap()));
+
+    let index_entry = git_out(&workspace, ["ls-files", "--stage", "vendor/sub"]);
+    assert!(
+        index_entry.trim().is_empty(),
+        "gitlink should be removed from root index: {index_entry}"
+    );
+    let modules = std::fs::read_to_string(workspace.join(".gitmodules")).unwrap_or_default();
+    assert!(!modules.contains("vendor/sub"));
+    let last_commit = git_out(&workspace, ["log", "-1", "--pretty=%s"]);
+    assert_eq!(last_commit.trim(), "Import Nit member vendor/sub");
+}
+
 fn git<const N: usize>(dir: &Path, args: [&str; N]) {
+    let status = std::process::Command::new("git")
+        .current_dir(dir)
+        .args(args)
+        .status()
+        .unwrap();
+    assert!(
+        status.success(),
+        "git {:?} failed in {}",
+        args,
+        dir.display()
+    );
+}
+
+fn git_args(dir: &Path, args: &[&str]) {
     let status = std::process::Command::new("git")
         .current_dir(dir)
         .args(args)
@@ -357,14 +487,6 @@ fn git_dir_out<const N: usize>(git_dir: &Path, args: [&str; N]) -> String {
         String::from_utf8_lossy(&output.stderr)
     );
     String::from_utf8_lossy(&output.stdout).to_string()
-}
-
-fn git_clone(remote: &Path, target: &Path) {
-    let status = std::process::Command::new("git")
-        .args(["clone", remote.to_str().unwrap(), target.to_str().unwrap()])
-        .status()
-        .unwrap();
-    assert!(status.success(), "git clone {} failed", remote.display());
 }
 
 fn clean_workspace_with_sdk() -> Fixture {

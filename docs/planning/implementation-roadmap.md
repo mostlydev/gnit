@@ -9,15 +9,17 @@ to `git` at first and keeps Git as the source of truth.
 
 - Root Rust package named `nit`.
 - Clap-based command surface.
-- `nit init`, `nit adopt`, `nit add`, `nit commit`, `nit land`, `nit checkout`,
-  `nit push`, `nit status`, `nit doctor`, `nit pin`, `nit change`, and
-  `nit update` initial commands.
+- `nit init`, `nit clone`, `nit adopt`, `nit ignore`, `nit import-submodule`,
+  `nit add`, `nit commit`, `nit land`, `nit checkout`, `nit push`, `nit status`,
+  `nit doctor`, `nit pin`, `nit change`, `nit review`, and `nit update` initial
+  commands.
 - typed roster and Pin metadata persisted as YAML.
 - transparent upkeep hook, wired but intentionally non-destructive
 - `install.sh` matching the GitHub Release tarball/checksum pattern.
 - Workflow tests for root repo setup, nested repo adoption, local excludes,
-  metadata-only commits, dirty-worktree pin refusal, Pin creation, and update
-  dry-run.
+  metadata-only commits, dirty-worktree pin refusal, Pin creation, ordered push
+  resume, clone plus pinned checkout, combined review, submodule import, doctor
+  exclude repair, and update dry-run.
 
 ## Phase 1: Roster And Discovery
 

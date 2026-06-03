@@ -1,19 +1,23 @@
 use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
 use crate::git;
-use crate::metadata::{Pin, Roster, PINS_DIR};
+use crate::metadata::{Pin, Roster};
 use crate::workspace;
 
 pub fn checkout(spec: String, exact: bool) -> Result<()> {
     let cwd = env::current_dir()?;
     let root = workspace::find_nit_workspace(&cwd)
         .context("not in a Nit workspace; run `nit init` first")?;
+    checkout_in(root, spec, exact)
+}
+
+pub fn checkout_in(root: PathBuf, spec: String, exact: bool) -> Result<()> {
     let roster = Roster::read(&root)?;
-    let pin = load_pin(&root, &spec)?;
+    let pin = Pin::load(&root, &spec)?;
 
     for pinned in &pin.members {
         let Some(member) = roster.members.iter().find(|member| member.id == pinned.id) else {
@@ -52,36 +56,6 @@ pub fn checkout(spec: String, exact: bool) -> Result<()> {
     workspace::repair_required_excludes(&root, &roster)?;
     println!("checked out Pin {}", pin.id);
     Ok(())
-}
-
-fn load_pin(root: &Path, spec: &str) -> Result<Pin> {
-    let direct = Pin::path(root, spec);
-    if direct.exists() {
-        return Pin::read(root, spec);
-    }
-
-    let pins_dir = root.join(PINS_DIR);
-    let mut matches = Vec::new();
-    for entry in fs::read_dir(&pins_dir).with_context(|| format!("read {}", pins_dir.display()))? {
-        let path = entry?.path();
-        if path.extension().and_then(|ext| ext.to_str()) != Some("yaml") {
-            continue;
-        }
-        let id = path
-            .file_stem()
-            .and_then(|stem| stem.to_str())
-            .context("pin filename is not utf-8")?;
-        let pin = Pin::read(root, id)?;
-        if pin.id == spec || pin.label.as_deref() == Some(spec) {
-            matches.push(pin);
-        }
-    }
-
-    match matches.len() {
-        0 => bail!("pin {spec} not found"),
-        1 => Ok(matches.remove(0)),
-        _ => bail!("pin label {spec} is ambiguous"),
-    }
 }
 
 fn ensure_commit_available(repo: &Path, commit: &str) -> Result<()> {

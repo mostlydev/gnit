@@ -20,8 +20,8 @@ nit push
 
 `nit land` remains canonical because it names a distinct transaction: commit
 staged member changes, create an unnamed Pin, and prepare ordered push. The
-scriptable equivalent `nit commit --pin` exists, but it is not the primary human
-workflow.
+decomposed form remains available as `nit commit -m <msg>` followed by
+`nit pin <name>` when separate steps are intentional.
 
 New members are created with plain `git init` or `git clone`, then registered
 with `nit adopt`.
@@ -30,4 +30,3 @@ with `nit adopt`.
 
 Minimizing verbs is not the goal if it forces humans to remember flags whose
 absence changes the meaning of the operation.
-

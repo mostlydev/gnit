@@ -1,10 +1,12 @@
 mod change;
 mod checkout;
 mod cli;
+mod clone;
 mod git;
 mod metadata;
 mod pin;
 mod push;
+mod review;
 mod update;
 mod upkeep;
 mod workspace;
@@ -25,6 +27,7 @@ fn main() -> Result<()> {
     }
 
     match cli.command {
+        Commands::Clone { url, path, pin } => clone::clone_workspace(url, path, pin),
         Commands::Add { paths, all, repo } => change::add(paths, all, repo),
         Commands::Commit { message } => change::commit(message).map(|_| ()),
         Commands::Land { name, message } => change::land(message, name),
@@ -39,6 +42,8 @@ fn main() -> Result<()> {
             id,
             no_commit,
         } => workspace::adopt(paths, id, no_commit),
+        Commands::Ignore { paths } => workspace::ignore(paths),
+        Commands::ImportSubmodule { path, id } => workspace::import_submodule(path, id),
         Commands::Doctor => workspace::doctor(),
         Commands::Status => workspace::status(),
         Commands::Pin {
@@ -60,6 +65,7 @@ fn main() -> Result<()> {
             ChangeCommands::Diff { id } => change::diff(id),
         },
         Commands::Push { resume } => push::push(resume),
+        Commands::Review { target } => review::review(target),
         Commands::Update { dry_run, force } => update::run(dry_run, force),
     }
 }

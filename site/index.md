@@ -24,7 +24,7 @@ features:
   - title: Pins, not pointers
     details: nit land snapshots exact commits across repos; nit checkout reproduces any state. No gitlink to bump, no .gitmodules to babysit.
   - title: Submodules go home
-    details: No detached HEADs. No "I committed but the parent didn't update." No recursive clone roulette. The footguns are gone.
+    details: No hidden parent-pointer bump. No "I committed but the parent didn't update." No recursive clone roulette. The footguns are exposed or gone.
 ---
 
 ## Why Nit
@@ -48,4 +48,4 @@ stay independent — Nit just stops making you do the bookkeeping by hand.
 
 Honest about the trade: against a submodule expert the keystroke win is modest. The
 durable win is the footguns Nit deletes — push ordering, detached-HEAD commit loss,
-gitlink bumps — and grouping that shows up in `nit log` instead of living in your head.
+gitlink bumps — and grouping that shows up in `nit change log` instead of living in your head.
