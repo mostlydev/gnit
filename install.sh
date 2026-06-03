@@ -17,10 +17,15 @@ esac
 
 ARCH="$(uname -m)"
 case "$ARCH" in
-  x86_64)  ARCH="x86_64" ;;
-  aarch64) ARCH="aarch64" ;;
-  arm64)   ARCH="aarch64" ;;
-  *)       err "Unsupported architecture: $ARCH" ;;
+  x86_64) ARCH="x86_64" ;;
+  aarch64|arm64)
+    if [ "$OS" = "darwin" ]; then
+      ARCH="aarch64"
+    else
+      err "Unsupported architecture until a linux/aarch64 release is published: $ARCH"
+    fi
+    ;;
+  *) err "Unsupported architecture: $ARCH" ;;
 esac
 
 info "Detected platform: ${OS}/${ARCH}"
@@ -83,4 +88,3 @@ esac
 
 echo ""
 info "Run 'nit doctor' to verify your installation."
-

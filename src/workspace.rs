@@ -5,13 +5,12 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 
 use crate::git;
-
-const ROSTER: &str = ".nit/roster.yaml";
+use crate::metadata::{Roster, RosterMember, ROSTER_PATH};
 
 pub fn init(control: bool, local: bool, remote: Option<String>) -> Result<()> {
     let cwd = env::current_dir()?;
     let nit_dir = cwd.join(".nit");
-    let roster = cwd.join(ROSTER);
+    let roster = cwd.join(ROSTER_PATH);
 
     if roster.exists() {
         bail!("Nit workspace already exists at {}", cwd.display());
@@ -29,15 +28,7 @@ pub fn init(control: bool, local: bool, remote: Option<String>) -> Result<()> {
     } else {
         "shared"
     };
-    let remote_line = remote
-        .as_ref()
-        .map(|url| format!("remote: {url}\n"))
-        .unwrap_or_default();
-    fs::write(
-        &roster,
-        format!("version: 1\nmode: {mode}\n{remote_line}members:\n"),
-    )
-    .context("write roster")?;
+    Roster::new(mode, remote).write(&cwd)?;
 
     println!("initialized Nit workspace");
     println!("  root: {}", cwd.display());
@@ -52,8 +43,7 @@ pub fn adopt(paths: Vec<PathBuf>, id: Option<String>, no_commit: bool) -> Result
 
     let cwd = env::current_dir()?;
     let root = find_nit_workspace(&cwd).context("not in a Nit workspace; run `nit init` first")?;
-    let roster_path = root.join(ROSTER);
-    let mut roster = fs::read_to_string(&roster_path).context("read roster")?;
+    let mut roster = Roster::read(&root)?;
     let mut adopted = Vec::new();
 
     for path in paths {
@@ -69,25 +59,29 @@ pub fn adopt(paths: Vec<PathBuf>, id: Option<String>, no_commit: bool) -> Result
                 .to_string_lossy()
                 .to_string()
         });
-        if roster_contains_id(&roster, &member_id) {
+        if roster.contains_id(&member_id) {
             bail!("member id {member_id} already exists");
         }
 
-        roster.push_str(&format!(
-            "  - id: {member_id}\n    path: {}\n",
-            rel.display()
-        ));
-        if let Ok(remote) = git::output_in(&abs, ["remote", "get-url", "origin"]) {
-            roster.push_str(&format!("    remote: {}\n", remote.trim()));
-        }
+        let remote = git::output_in(&abs, ["remote", "get-url", "origin"])
+            .ok()
+            .map(|remote| remote.trim().to_string())
+            .filter(|remote| !remote.is_empty());
+        let exclude_path = rel.to_string_lossy().to_string();
+        roster.members.push(RosterMember {
+            id: member_id.clone(),
+            path: exclude_path.clone(),
+            remote,
+            required_excludes: vec![exclude_path],
+        });
         adopted.push((member_id, rel));
     }
 
-    fs::write(&roster_path, roster).context("write roster")?;
+    roster.write(&root)?;
     repair_root_excludes(&root, &adopted)?;
 
     if !no_commit {
-        auto_commit_metadata(&root, "Update Nit roster").ok();
+        commit_metadata(&root, "Update Nit roster").ok();
     }
 
     let ids = adopted
@@ -112,10 +106,7 @@ pub fn doctor() -> Result<()> {
     match find_nit_workspace(env::current_dir()?.as_path()) {
         Some(root) => {
             println!("  workspace: {}", root.display());
-            println!(
-                "  roster members: {}",
-                roster_members(&root.join(ROSTER))?.len()
-            );
+            println!("  roster members: {}", Roster::read(&root)?.members.len());
         }
         None => println!("  workspace: not found"),
     }
@@ -127,13 +118,13 @@ pub fn doctor() -> Result<()> {
 pub fn status() -> Result<()> {
     let cwd = env::current_dir()?;
     if let Some(root) = find_nit_workspace(&cwd) {
-        let members = roster_members(&root.join(ROSTER))?;
+        let roster = Roster::read(&root)?;
         println!("Workspace {}", root.display());
-        if members.is_empty() {
+        if roster.members.is_empty() {
             println!("Members: none");
         } else {
             println!("Members:");
-            for member in members {
+            for member in roster.members {
                 println!("  {}  {}", member.id, member.path);
             }
         }
@@ -150,42 +141,11 @@ pub fn status() -> Result<()> {
 
 pub fn find_nit_workspace(start: &Path) -> Option<PathBuf> {
     for dir in start.ancestors() {
-        if dir.join(ROSTER).exists() {
+        if dir.join(ROSTER_PATH).exists() {
             return Some(dir.to_path_buf());
         }
     }
     None
-}
-
-#[derive(Debug, Eq, PartialEq)]
-struct Member {
-    id: String,
-    path: String,
-}
-
-fn roster_members(path: &Path) -> Result<Vec<Member>> {
-    let text = fs::read_to_string(path).context("read roster")?;
-    let mut members = Vec::new();
-    let mut current_id: Option<String> = None;
-
-    for line in text.lines() {
-        if let Some(id) = line.strip_prefix("  - id: ") {
-            current_id = Some(id.to_string());
-        } else if let Some(member_path) = line.strip_prefix("    path: ") {
-            if let Some(id) = current_id.take() {
-                members.push(Member {
-                    id,
-                    path: member_path.to_string(),
-                });
-            }
-        }
-    }
-
-    Ok(members)
-}
-
-fn roster_contains_id(roster: &str, id: &str) -> bool {
-    roster.lines().any(|line| line == format!("  - id: {id}"))
 }
 
 fn absolutize(cwd: &Path, path: &Path) -> PathBuf {
@@ -218,7 +178,7 @@ fn repair_root_excludes(root: &Path, adopted: &[(String, PathBuf)]) -> Result<()
     fs::write(exclude, text).context("write git exclude")
 }
 
-fn auto_commit_metadata(root: &Path, message: &str) -> Result<()> {
+pub(crate) fn commit_metadata(root: &Path, message: &str) -> Result<()> {
     if !git::is_git_repo(root) {
         return Ok(());
     }

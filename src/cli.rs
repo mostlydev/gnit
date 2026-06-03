@@ -48,6 +48,14 @@ pub enum Commands {
     Doctor,
     /// Show the current Nit workspace state.
     Status,
+    /// Create a reproducible pin for committed member state.
+    Pin {
+        /// Optional human label for the pin.
+        name: Option<String>,
+        /// Do not auto-commit Nit metadata changes.
+        #[arg(long)]
+        no_commit: bool,
+    },
     /// Update the nit binary from the latest GitHub release.
     Update {
         /// Print the update action without running it.

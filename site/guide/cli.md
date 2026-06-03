@@ -8,10 +8,13 @@ nit init
 nit adopt <path>...
 nit status
 nit doctor
+nit pin <name>
 nit update --dry-run
 ```
 
-The implemented CLI is currently a skeleton. The intended full surface is:
+The implemented CLI can create a workspace, adopt existing repos, preserve local
+excludes, inspect the roster, record committed member HEADs as a Pin, and follow
+the explicit update path. The intended full surface is:
 
 ```sh
 nit init

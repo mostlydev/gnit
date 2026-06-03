@@ -1,5 +1,7 @@
 mod cli;
 mod git;
+mod metadata;
+mod pin;
 mod update;
 mod upkeep;
 mod workspace;
@@ -28,6 +30,7 @@ fn main() -> Result<()> {
         } => workspace::adopt(paths, id, no_commit),
         Commands::Doctor => workspace::doctor(),
         Commands::Status => workspace::status(),
+        Commands::Pin { name, no_commit } => pin::create(name, no_commit),
         Commands::Update { dry_run, force } => update::run(dry_run, force),
     }
 }

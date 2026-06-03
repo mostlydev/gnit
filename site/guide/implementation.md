@@ -6,6 +6,9 @@ The first implementation shells out to `git`. Rust handles command parsing,
 transaction planning, diagnostics, state modeling, and tests. Git remains the
 source of truth for repository operations.
 
+The current slice implements workspace init/adoption, typed roster metadata,
+status/doctor, explicit update, and Pin recording for committed member HEADs.
+
 ## Release Path
 
 Nit follows the same release shape as Clawdapus:
