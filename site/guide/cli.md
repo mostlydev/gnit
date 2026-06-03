@@ -6,15 +6,26 @@ only when the operation is a new workspace-level concept.
 ```sh
 nit init
 nit adopt <path>...
+nit add <path>...
+nit add -A
+nit commit -m <msg>
+nit land [<name>] -m <msg>
 nit status
 nit doctor
 nit pin <name>
+nit pin <name> --change <change-id>
+nit change status <id>
+nit change show <id>
+nit change log [<id>]
+nit change diff <id>
 nit update --dry-run
 ```
 
 The implemented CLI can create a workspace, adopt existing repos, preserve local
-excludes, inspect the roster, record committed member HEADs as a Pin, and follow
-the explicit update path. The intended full surface is:
+excludes, stage workspace paths, commit staged root/member changes under one
+`Nit-Change-Id`, land a change with a Pin, inspect trailer-based changes, record
+committed member HEADs as a Pin, and follow the explicit update path. The
+intended full surface is:
 
 ```sh
 nit init

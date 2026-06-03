@@ -1,3 +1,4 @@
+mod change;
 mod cli;
 mod git;
 mod metadata;
@@ -8,7 +9,7 @@ mod workspace;
 
 use anyhow::Result;
 use clap::Parser;
-use cli::{Cli, Commands};
+use cli::{ChangeCommands, Cli, Commands};
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -18,6 +19,9 @@ fn main() -> Result<()> {
     }
 
     match cli.command {
+        Commands::Add { paths, all, repo } => change::add(paths, all, repo),
+        Commands::Commit { message } => change::commit(message).map(|_| ()),
+        Commands::Land { name, message } => change::land(message, name),
         Commands::Init {
             control,
             local,
@@ -30,7 +34,24 @@ fn main() -> Result<()> {
         } => workspace::adopt(paths, id, no_commit),
         Commands::Doctor => workspace::doctor(),
         Commands::Status => workspace::status(),
-        Commands::Pin { name, no_commit } => pin::create(name, no_commit),
+        Commands::Pin {
+            name,
+            change,
+            no_commit,
+        } => {
+            if let Some(change) = change {
+                change::ensure_exists(&change)?;
+                pin::create_with_changes(name, vec![change], no_commit)
+            } else {
+                pin::create(name, no_commit)
+            }
+        }
+        Commands::Change { command } => match command {
+            ChangeCommands::Show { id } => change::show(id),
+            ChangeCommands::Status { id } => change::status(id),
+            ChangeCommands::Log { id } => change::log(id),
+            ChangeCommands::Diff { id } => change::diff(id),
+        },
         Commands::Update { dry_run, force } => update::run(dry_run, force),
     }
 }

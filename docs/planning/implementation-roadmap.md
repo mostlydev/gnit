@@ -9,8 +9,8 @@ to `git` at first and keeps Git as the source of truth.
 
 - Root Rust package named `nit`.
 - Clap-based command surface.
-- `nit init`, `nit adopt`, `nit status`, `nit doctor`, `nit pin`, and
-  `nit update` initial commands.
+- `nit init`, `nit adopt`, `nit add`, `nit commit`, `nit land`, `nit status`,
+  `nit doctor`, `nit pin`, `nit change`, and `nit update` initial commands.
 - typed roster and Pin metadata persisted as YAML.
 - transparent upkeep hook, wired but intentionally non-destructive
 - `install.sh` matching the GitHub Release tarball/checksum pattern.
@@ -33,6 +33,7 @@ to `git` at first and keeps Git as the source of truth.
 - `nit commit`
 - `Nit-Change-Id` trailer generation
 - Change projection and ambiguity reporting
+- trailer-based `nit change status/show/log/diff`
 
 ## Phase 3: Pins And Land
 
@@ -40,6 +41,7 @@ to `git` at first and keeps Git as the source of truth.
 - `nit land`
 - pin artifacts under `.nit/pins/`
 - metadata auto-commit
+- `nit pin --change` provenance recording
 
 ## Phase 4: Checkout
 

@@ -20,6 +20,31 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
+    /// Stage paths across workspace members.
+    Add {
+        /// Stage all changes in the workspace.
+        #[arg(short = 'A', long)]
+        all: bool,
+        /// Interpret paths relative to one member id.
+        #[arg(long)]
+        repo: Option<String>,
+        /// Paths to stage.
+        paths: Vec<PathBuf>,
+    },
+    /// Commit staged workspace changes with a shared Nit-Change-Id.
+    Commit {
+        /// Commit message.
+        #[arg(short, long)]
+        message: String,
+    },
+    /// Commit staged changes and create a Pin.
+    Land {
+        /// Optional label for the resulting Pin.
+        name: Option<String>,
+        /// Commit message.
+        #[arg(short, long)]
+        message: String,
+    },
     /// Create Nit metadata in this workspace.
     Init {
         /// Create a tiny workspace-control repo when no natural root exists.
@@ -52,9 +77,17 @@ pub enum Commands {
     Pin {
         /// Optional human label for the pin.
         name: Option<String>,
+        /// Record provenance from a Change.
+        #[arg(long)]
+        change: Option<String>,
         /// Do not auto-commit Nit metadata changes.
         #[arg(long)]
         no_commit: bool,
+    },
+    /// Inspect changes reconstructed from Nit-Change-Id trailers.
+    Change {
+        #[command(subcommand)]
+        command: ChangeCommands,
     },
     /// Update the nit binary from the latest GitHub release.
     Update {
@@ -65,4 +98,16 @@ pub enum Commands {
         #[arg(long)]
         force: bool,
     },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ChangeCommands {
+    /// Show participant commits for a Change.
+    Show { id: String },
+    /// Show projection/ambiguity status for a Change.
+    Status { id: String },
+    /// List Changes, or commits for one Change.
+    Log { id: Option<String> },
+    /// Show per-repo diffs for a Change.
+    Diff { id: String },
 }

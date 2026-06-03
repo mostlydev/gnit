@@ -1,6 +1,11 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+struct Fixture {
+    _temp: tempfile::TempDir,
+    root: PathBuf,
+}
 
 #[test]
 fn help_describes_nit() {
@@ -167,6 +172,79 @@ fn update_dry_run_shows_installer() {
         .stdout(predicate::str::contains("install.sh"));
 }
 
+#[test]
+fn commit_change_and_land_workflow_records_shared_history() {
+    let fixture = clean_workspace_with_sdk();
+    let workspace = fixture.root.as_path();
+
+    std::fs::write(workspace.join("README.md"), "root v2\n").unwrap();
+    std::fs::write(
+        workspace.join("vendor/sdk/lib.rs"),
+        "pub fn sdk() -> &'static str { \"v2\" }\n",
+    )
+    .unwrap();
+
+    nit(workspace, ["add", "README.md", "vendor/sdk/lib.rs"]);
+    let commit = nit(workspace, ["commit", "-m", "Update root and sdk"]);
+    let change_id = parse_created_change(&commit);
+
+    let root_commit = git_out(workspace, ["log", "-1", "--pretty=%B"]);
+    let sdk_commit = git_out(&workspace.join("vendor/sdk"), ["log", "-1", "--pretty=%B"]);
+    assert!(root_commit.contains(&format!("Nit-Change-Id: {change_id}")));
+    assert!(sdk_commit.contains(&format!("Nit-Change-Id: {change_id}")));
+
+    nit(workspace, ["change", "status", &change_id])
+        .success()
+        .stdout(predicate::str::contains("root:"))
+        .stdout(predicate::str::contains("sdk:"));
+    nit(workspace, ["change", "show", &change_id])
+        .success()
+        .stdout(predicate::str::contains("Update root and sdk"));
+    nit(workspace, ["change", "log"])
+        .success()
+        .stdout(predicate::str::contains(&change_id));
+
+    std::fs::write(
+        workspace.join("vendor/sdk/lib.rs"),
+        "pub fn sdk() -> &'static str { \"ambiguous\" }\n",
+    )
+    .unwrap();
+    git(&workspace.join("vendor/sdk"), ["add", "lib.rs"]);
+    let duplicate_change_message = format!("Manual follow-up\n\nNit-Change-Id: {change_id}");
+    git(
+        &workspace.join("vendor/sdk"),
+        ["commit", "-m", &duplicate_change_message],
+    );
+    nit(workspace, ["change", "status", &change_id])
+        .success()
+        .stdout(predicate::str::contains("sdk: ambiguous (2 commits)"));
+
+    std::fs::write(
+        workspace.join("vendor/sdk/lib.rs"),
+        "pub fn sdk() -> &'static str { \"landed\" }\n",
+    )
+    .unwrap();
+    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    let land = nit(workspace, ["land", "release", "-m", "Land sdk update"]);
+    let landed_change = parse_created_change(&land);
+
+    let pin_paths = std::fs::read_dir(workspace.join(".nit/pins"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect::<Vec<_>>();
+    assert_eq!(pin_paths.len(), 1);
+    let pin = std::fs::read_to_string(&pin_paths[0]).unwrap();
+    assert!(pin.contains("label: release"));
+    assert!(pin.contains(&landed_change));
+
+    nit(
+        workspace,
+        ["pin", "release-copy", "--change", &landed_change],
+    )
+    .success()
+    .stdout(predicate::str::contains("created Pin PIN-"));
+}
+
 fn git<const N: usize>(dir: &Path, args: [&str; N]) {
     let status = std::process::Command::new("git")
         .current_dir(dir)
@@ -195,4 +273,53 @@ fn git_out<const N: usize>(dir: &Path, args: [&str; N]) -> String {
         String::from_utf8_lossy(&output.stderr)
     );
     String::from_utf8_lossy(&output.stdout).to_string()
+}
+
+fn clean_workspace_with_sdk() -> Fixture {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().to_path_buf();
+    git(&root, ["init"]);
+    git(&root, ["config", "user.email", "nit-test@example.com"]);
+    git(&root, ["config", "user.name", "Nit Test"]);
+    std::fs::write(root.join("README.md"), "root\n").unwrap();
+    git(&root, ["add", "README.md"]);
+    git(&root, ["commit", "-m", "Initial root"]);
+
+    std::fs::create_dir_all(root.join("vendor/sdk")).unwrap();
+    git(&root.join("vendor/sdk"), ["init"]);
+    git(
+        &root.join("vendor/sdk"),
+        ["config", "user.email", "nit-test@example.com"],
+    );
+    git(
+        &root.join("vendor/sdk"),
+        ["config", "user.name", "Nit Test"],
+    );
+    std::fs::write(root.join("vendor/sdk/lib.rs"), "pub fn sdk() {}\n").unwrap();
+    git(&root.join("vendor/sdk"), ["add", "lib.rs"]);
+    git(&root.join("vendor/sdk"), ["commit", "-m", "Initial sdk"]);
+
+    nit(&root, ["init"]);
+    nit(&root, ["adopt", "vendor/sdk", "--id", "sdk"]);
+
+    Fixture { _temp: temp, root }
+}
+
+fn nit<const N: usize>(dir: &Path, args: [&str; N]) -> assert_cmd::assert::Assert {
+    Command::cargo_bin("nit")
+        .unwrap()
+        .args(args)
+        .current_dir(dir)
+        .assert()
+}
+
+fn parse_created_change(assert: &assert_cmd::assert::Assert) -> String {
+    let output = assert.get_output();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    stdout
+        .lines()
+        .find_map(|line| line.strip_prefix("created Change "))
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| panic!("missing created Change line in {stdout}"))
 }

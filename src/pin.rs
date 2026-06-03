@@ -9,6 +9,14 @@ use crate::metadata::{Pin, PinMember, Roster};
 use crate::workspace;
 
 pub fn create(label: Option<String>, no_commit: bool) -> Result<()> {
+    create_with_changes(label, Vec::new(), no_commit)
+}
+
+pub fn create_with_changes(
+    label: Option<String>,
+    changes: Vec<String>,
+    no_commit: bool,
+) -> Result<()> {
     let cwd = env::current_dir()?;
     let root = workspace::find_nit_workspace(&cwd)
         .context("not in a Nit workspace; run `nit init` first")?;
@@ -21,6 +29,7 @@ pub fn create(label: Option<String>, no_commit: bool) -> Result<()> {
 
     let mut pin = Pin::new(generate_id(label.as_deref()));
     pin.label = label;
+    pin.provenance.changes = changes;
 
     for member in roster.members {
         let member_root = root.join(&member.path);
