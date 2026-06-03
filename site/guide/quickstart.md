@@ -1,8 +1,9 @@
 # Quickstart
 
-Nit has an early Rust CLI for workspace creation, adoption, status, diagnosis,
-and explicit updates. The full publish workflow below is the intended day-one
-surface as the remaining verbs land.
+Turn a directory of related repos into one workspace, then commit and publish
+across all of them at once. The early Rust CLI ships `init`, `adopt`, `status`,
+`add`, `commit`, `land`, `pin`, and `change` today; `checkout`, `push`, and
+`review` are landing next.
 
 ## Create A Workspace
 
