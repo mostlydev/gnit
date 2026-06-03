@@ -11,10 +11,12 @@ It defines the v1 primitives:
 - **Checkout**: safe materialization of a Pin across the workspace.
 - **Review**: a combined review artifact for a Change or Pin.
 
-The public documentation site lives in [site/](site/). It is a VitePress site
-with a GitHub Pages workflow in [.github/workflows/deploy-site.yml](.github/workflows/deploy-site.yml).
-The workflow is ready to deploy on pushes to `master` once a remote repository
-and Pages settings are configured.
+The public documentation site is live at **https://mostlydev.github.io/nit/**.
+It lives in [site/](site/) as a VitePress site and redeploys via
+[.github/workflows/deploy-site.yml](.github/workflows/deploy-site.yml) on every
+push to `master` that touches `site/**` or the workflow. The build sets
+`VITEPRESS_BASE=/nit/` for the project-page path; if a custom domain (e.g.
+`nit.dev`) is added later, set the base to `/` and add `site/public/CNAME`.
 
 ## Repository Layout
 
