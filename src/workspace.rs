@@ -84,7 +84,7 @@ pub fn adopt(paths: Vec<PathBuf>, id: Option<String>, no_commit: bool) -> Result
     }
 
     roster.write(&root)?;
-    repair_root_excludes(&root, &adopted)?;
+    repair_required_excludes(&root, &roster)?;
 
     if !no_commit {
         commit_metadata(&root, "Update Nit roster").ok();
@@ -168,17 +168,18 @@ fn relative_to(root: &Path, path: &Path) -> Result<PathBuf> {
         .with_context(|| format!("{} is outside workspace {}", path.display(), root.display()))
 }
 
-fn repair_root_excludes(root: &Path, adopted: &[(String, PathBuf)]) -> Result<()> {
+pub(crate) fn repair_required_excludes(root: &Path, roster: &Roster) -> Result<()> {
     let exclude = root.join(".git/info/exclude");
     if !exclude.exists() {
         return Ok(());
     }
 
     let mut text = fs::read_to_string(&exclude).unwrap_or_default();
-    for (_, path) in adopted {
-        let entry = path.to_string_lossy();
-        if !text.lines().any(|line| line == entry) {
-            text.push_str(&format!("{entry}\n"));
+    for member in &roster.members {
+        for entry in &member.required_excludes {
+            if !text.lines().any(|line| line == entry) {
+                text.push_str(&format!("{entry}\n"));
+            }
         }
     }
     fs::write(exclude, text).context("write git exclude")

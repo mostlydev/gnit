@@ -45,6 +45,14 @@ pub enum Commands {
         #[arg(short, long)]
         message: String,
     },
+    /// Materialize a Pin across workspace members.
+    Checkout {
+        /// Pin id or label.
+        pin: String,
+        /// Reset and clean dirty member worktrees.
+        #[arg(long)]
+        exact: bool,
+    },
     /// Create Nit metadata in this workspace.
     Init {
         /// Create a tiny workspace-control repo when no natural root exists.
@@ -88,6 +96,12 @@ pub enum Commands {
     Change {
         #[command(subcommand)]
         command: ChangeCommands,
+    },
+    /// Push member repos first, then the workspace metadata repo.
+    Push {
+        /// Retry the ordered push after a previous failure.
+        #[arg(long)]
+        resume: bool,
     },
     /// Update the nit binary from the latest GitHub release.
     Update {

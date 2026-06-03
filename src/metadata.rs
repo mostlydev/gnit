@@ -104,7 +104,6 @@ impl Pin {
         root.join(PINS_DIR).join(format!("{id}.yaml"))
     }
 
-    #[cfg(test)]
     pub fn read(root: &Path, id: &str) -> Result<Self> {
         let path = Self::path(root, id);
         let text =

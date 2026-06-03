@@ -10,6 +10,8 @@ nit add <path>...
 nit add -A
 nit commit -m <msg>
 nit land [<name>] -m <msg>
+nit checkout <pin> [--exact]
+nit push [--resume]
 nit status
 nit doctor
 nit pin <name>
@@ -24,7 +26,8 @@ nit update --dry-run
 The implemented CLI can create a workspace, adopt existing repos, preserve local
 excludes, stage workspace paths, commit staged root/member changes under one
 `Nit-Change-Id`, land a change with a Pin, inspect trailer-based changes, record
-committed member HEADs as a Pin, and follow the explicit update path. The
+committed member HEADs as a Pin, materialize Pins with safe checkout defaults,
+push members before workspace metadata, and follow the explicit update path. The
 intended full surface is:
 
 ```sh

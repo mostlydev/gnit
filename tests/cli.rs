@@ -7,6 +7,13 @@ struct Fixture {
     root: PathBuf,
 }
 
+struct RemoteFixture {
+    _temp: tempfile::TempDir,
+    root: PathBuf,
+    root_remote: PathBuf,
+    sdk_remote: PathBuf,
+}
+
 #[test]
 fn help_describes_nit() {
     let mut cmd = Command::cargo_bin("nit").unwrap();
@@ -257,6 +264,54 @@ fn adopt_rejects_plain_subdirectory() {
         .stderr(predicate::str::contains("not a repository root"));
 }
 
+#[test]
+fn push_and_checkout_workflow_reconstructs_missing_member() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+
+    std::fs::write(
+        workspace.join("vendor/sdk/lib.rs"),
+        "pub fn sdk() -> &'static str { \"pushed\" }\n",
+    )
+    .unwrap();
+    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    nit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
+    nit(workspace, ["push"]).success();
+    nit(workspace, ["push", "--resume"]).success();
+
+    let sdk_head = git_out(&workspace.join("vendor/sdk"), ["rev-parse", "HEAD"]);
+    let root_head = git_out(workspace, ["rev-parse", "HEAD"]);
+    assert_eq!(
+        git_dir_out(&fixture.sdk_remote, ["rev-parse", "master"]).trim(),
+        sdk_head.trim()
+    );
+    assert_eq!(
+        git_dir_out(&fixture.root_remote, ["rev-parse", "master"]).trim(),
+        root_head.trim()
+    );
+
+    let restored = fixture._temp.path().join("restored");
+    git_clone(&fixture.root_remote, &restored);
+    nit(&restored, ["checkout", "baseline"])
+        .success()
+        .stdout(predicate::str::contains("cloned sdk"))
+        .stdout(predicate::str::contains("checked out Pin"));
+    assert_eq!(
+        std::fs::read_to_string(restored.join("vendor/sdk/lib.rs")).unwrap(),
+        "pub fn sdk() -> &'static str { \"pushed\" }\n"
+    );
+
+    std::fs::write(restored.join("vendor/sdk/lib.rs"), "dirty\n").unwrap();
+    nit(&restored, ["checkout", "baseline"])
+        .failure()
+        .stderr(predicate::str::contains("use --exact to reset it"));
+    nit(&restored, ["checkout", "baseline", "--exact"]).success();
+    assert_eq!(
+        std::fs::read_to_string(restored.join("vendor/sdk/lib.rs")).unwrap(),
+        "pub fn sdk() -> &'static str { \"pushed\" }\n"
+    );
+}
+
 fn git<const N: usize>(dir: &Path, args: [&str; N]) {
     let status = std::process::Command::new("git")
         .current_dir(dir)
@@ -287,6 +342,31 @@ fn git_out<const N: usize>(dir: &Path, args: [&str; N]) -> String {
     String::from_utf8_lossy(&output.stdout).to_string()
 }
 
+fn git_dir_out<const N: usize>(git_dir: &Path, args: [&str; N]) -> String {
+    let output = std::process::Command::new("git")
+        .arg("--git-dir")
+        .arg(git_dir)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git --git-dir {} {:?} failed: {}",
+        git_dir.display(),
+        args,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).to_string()
+}
+
+fn git_clone(remote: &Path, target: &Path) {
+    let status = std::process::Command::new("git")
+        .args(["clone", remote.to_str().unwrap(), target.to_str().unwrap()])
+        .status()
+        .unwrap();
+    assert!(status.success(), "git clone {} failed", remote.display());
+}
+
 fn clean_workspace_with_sdk() -> Fixture {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().to_path_buf();
@@ -315,6 +395,65 @@ fn clean_workspace_with_sdk() -> Fixture {
     nit(&root, ["adopt", "vendor/sdk", "--id", "sdk"]);
 
     Fixture { _temp: temp, root }
+}
+
+fn workspace_with_remotes() -> RemoteFixture {
+    let temp = tempfile::tempdir().unwrap();
+    let remotes = temp.path().join("remotes");
+    std::fs::create_dir_all(&remotes).unwrap();
+    let root_remote = remotes.join("root.git");
+    let sdk_remote = remotes.join("sdk.git");
+    git(
+        temp.path(),
+        ["init", "--bare", root_remote.to_str().unwrap()],
+    );
+    git(
+        temp.path(),
+        ["init", "--bare", sdk_remote.to_str().unwrap()],
+    );
+
+    let root = temp.path().join("workspace");
+    std::fs::create_dir(&root).unwrap();
+    git(&root, ["init"]);
+    git(&root, ["config", "user.email", "nit-test@example.com"]);
+    git(&root, ["config", "user.name", "Nit Test"]);
+    git(
+        &root,
+        ["remote", "add", "origin", root_remote.to_str().unwrap()],
+    );
+    std::fs::write(root.join("README.md"), "root\n").unwrap();
+    git(&root, ["add", "README.md"]);
+    git(&root, ["commit", "-m", "Initial root"]);
+    git(&root, ["push", "origin", "HEAD"]);
+
+    std::fs::create_dir_all(root.join("vendor/sdk")).unwrap();
+    git(&root.join("vendor/sdk"), ["init"]);
+    git(
+        &root.join("vendor/sdk"),
+        ["config", "user.email", "nit-test@example.com"],
+    );
+    git(
+        &root.join("vendor/sdk"),
+        ["config", "user.name", "Nit Test"],
+    );
+    git(
+        &root.join("vendor/sdk"),
+        ["remote", "add", "origin", sdk_remote.to_str().unwrap()],
+    );
+    std::fs::write(root.join("vendor/sdk/lib.rs"), "pub fn sdk() {}\n").unwrap();
+    git(&root.join("vendor/sdk"), ["add", "lib.rs"]);
+    git(&root.join("vendor/sdk"), ["commit", "-m", "Initial sdk"]);
+    git(&root.join("vendor/sdk"), ["push", "origin", "HEAD"]);
+
+    nit(&root, ["init"]);
+    nit(&root, ["adopt", "vendor/sdk", "--id", "sdk"]);
+
+    RemoteFixture {
+        _temp: temp,
+        root,
+        root_remote,
+        sdk_remote,
+    }
 }
 
 fn nit<const N: usize>(dir: &Path, args: [&str; N]) -> assert_cmd::assert::Assert {

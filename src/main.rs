@@ -1,8 +1,10 @@
 mod change;
+mod checkout;
 mod cli;
 mod git;
 mod metadata;
 mod pin;
+mod push;
 mod update;
 mod upkeep;
 mod workspace;
@@ -26,6 +28,7 @@ fn main() -> Result<()> {
         Commands::Add { paths, all, repo } => change::add(paths, all, repo),
         Commands::Commit { message } => change::commit(message).map(|_| ()),
         Commands::Land { name, message } => change::land(message, name),
+        Commands::Checkout { pin, exact } => checkout::checkout(pin, exact),
         Commands::Init {
             control,
             local,
@@ -56,6 +59,7 @@ fn main() -> Result<()> {
             ChangeCommands::Log { id } => change::log(id),
             ChangeCommands::Diff { id } => change::diff(id),
         },
+        Commands::Push { resume } => push::push(resume),
         Commands::Update { dry_run, force } => update::run(dry_run, force),
     }
 }
