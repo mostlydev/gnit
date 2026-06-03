@@ -22,6 +22,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Configure Pages
+        # enablement: true self-bootstraps Pages (Source = GitHub Actions) on the
+        # first run, so no manual repo-settings step is required.
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -33,6 +39,11 @@ jobs:
       - name: Build
         run: npm run build
         working-directory: site
+        env:
+          # Project page at <owner>.github.io/nit/ needs base "/nit/".
+          # If a custom domain (e.g. nit.dev) is added later: set this to "/"
+          # and add site/public/CNAME. The base is env-driven in config.mts.
+          VITEPRESS_BASE: /nit/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site/.vitepress/dist
