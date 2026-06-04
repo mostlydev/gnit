@@ -11,7 +11,7 @@ hero:
       link: /guide/quickstart
     - theme: alt
       text: Why Nit
-      link: /guide/design
+      link: "#why-nit"
     - theme: alt
       text: GitHub
       link: https://github.com/mostlydev/nit
