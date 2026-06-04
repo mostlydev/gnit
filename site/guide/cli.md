@@ -66,9 +66,10 @@ nit review <change|pin>
 separate steps.
 
 `nit checkout <pin>` materializes exact member commits and refuses dirty member
-worktrees unless `--exact` is passed. v0 uses detached checkout for pinned
-commits; treat it as reproducible materialization, not a place to continue
-normal branch work.
+worktrees unless `--exact` is passed. When the pinned commit is the tip of a
+local branch, Nit checks out that branch. When it is the tip of a remote branch,
+Nit creates or fast-forwards the local branch safely. If no branch points at the
+commit, Nit detaches HEAD and prints a warning instead of hiding the state.
 
 `nit status` is grouped and legible: it shows root and member staged / modified /
 untracked counts, the branch, `missing locally`, member `drifted from pin`, plus

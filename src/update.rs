@@ -248,10 +248,10 @@ fn read_cache(path: &Path) -> Result<UpdateCache> {
             continue;
         };
         match key {
-            "checked_at" => cache.checked_at = value.parse().ok(),
-            "latest_tag" => cache.latest_tag = Some(value.to_string()),
-            "latest_version" => cache.latest_version = Some(value.to_string()),
-            "last_notified_at" => cache.last_notified_at = value.parse().ok(),
+            "checked_at" => cache.checked_at = optional_timestamp(value),
+            "latest_tag" => cache.latest_tag = optional_string(value),
+            "latest_version" => cache.latest_version = optional_string(value),
+            "last_notified_at" => cache.last_notified_at = optional_timestamp(value),
             _ => {}
         }
     }
@@ -306,14 +306,26 @@ fn env_flag(name: &str) -> bool {
 }
 
 fn extract_tag_name(json: &str) -> Option<String> {
-    let tag_key = "\"tag_name\"";
-    let key_start = json.find(tag_key)?;
-    let after_key = &json[key_start + tag_key.len()..];
-    let colon = after_key.find(':')?;
-    let after_colon = after_key[colon + 1..].trim_start();
-    let after_quote = after_colon.strip_prefix('"')?;
-    let end = after_quote.find('"')?;
-    Some(after_quote[..end].to_string())
+    let value = serde_yaml::from_str::<serde_yaml::Value>(json).ok()?;
+    let key = serde_yaml::Value::String("tag_name".to_string());
+    value
+        .as_mapping()?
+        .get(&key)?
+        .as_str()
+        .and_then(optional_string)
+}
+
+fn optional_timestamp(value: &str) -> Option<u64> {
+    value
+        .trim()
+        .parse()
+        .ok()
+        .filter(|timestamp| *timestamp != 0)
+}
+
+fn optional_string(value: &str) -> Option<String> {
+    let value = value.trim();
+    (!value.is_empty()).then(|| value.to_string())
 }
 
 fn version_from_tag(tag: &str) -> Option<String> {
@@ -365,6 +377,29 @@ mod tests {
         let json = r#"{"html_url":"https://example.test","tag_name":"v0.2.10"}"#;
         assert_eq!(extract_tag_name(json).as_deref(), Some("v0.2.10"));
         assert_eq!(version_from_tag("v0.2.10").as_deref(), Some("0.2.10"));
+    }
+
+    #[test]
+    fn parses_top_level_release_tag_only() {
+        let json = r#"{"body":"old payload with \"tag_name\":\"v9.9.9\"","tag_name":"v0.3.1"}"#;
+        assert_eq!(extract_tag_name(json).as_deref(), Some("v0.3.1"));
+    }
+
+    #[test]
+    fn cache_read_drops_empty_strings_and_zero_timestamps() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("update-cache");
+        std::fs::write(
+            &path,
+            "checked_at=0\nlatest_tag=\nlatest_version=\nlast_notified_at=0\n",
+        )
+        .unwrap();
+
+        let cache = read_cache(&path).unwrap();
+        assert_eq!(cache.checked_at, None);
+        assert_eq!(cache.latest_tag, None);
+        assert_eq!(cache.latest_version, None);
+        assert_eq!(cache.last_notified_at, None);
     }
 
     #[test]

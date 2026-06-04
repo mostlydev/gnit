@@ -7,9 +7,9 @@ transaction planning, diagnostics, state modeling, and tests. Git remains the
 source of truth for repository operations.
 
 The current slice implements workspace init/adoption, typed roster metadata,
-cross-repo staging, trailer-based Change commits and views, `land`, safe Pin
-checkout, ordered push, status/doctor, explicit update, cached update notices,
-and Pin recording for committed member HEADs.
+cross-repo staging, trailer-based Change commits and views, `land`,
+branch-aware Pin checkout, ordered push, status/doctor, explicit update, cached
+update notices, and Pin recording for committed member HEADs.
 
 ## Release Path
 

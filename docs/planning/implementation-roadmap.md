@@ -79,6 +79,14 @@ to `git` at first and keeps Git as the source of truth.
 - keep binary replacement explicit through `nit update`
 - expose `nit update --check` for an explicit metadata refresh
 
+## Phase 8: Branch-Aware Checkout (v0.4.0)
+
+- use Pin branch hints and local/remote branch tips during `nit checkout`
+- keep normal checkouts on branches when safe
+- detach only when no branch points at the pinned commit, and warn clearly
+- avoid hidden branch ref rewrites in `nit checkout --exact`
+- harden cached-update parsing from the v0.3.0 third-party review
+
 ## Release And Update
 
 - GitHub Release assets for supported platforms.

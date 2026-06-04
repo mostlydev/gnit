@@ -1,0 +1,35 @@
+# 0009: Branch-Aware Checkout
+
+## Status
+
+Accepted. Shipped in v0.4.0.
+
+## Context
+
+Pins record exact member commits and optional `branch_hint` values. v0.3.0
+materialized every pinned member with `git checkout --detach`, even when the
+commit was the tip of a normal branch. That reproduced one of the submodule
+footguns Nit is meant to remove: users could start work from a detached HEAD and
+lose track of new commits.
+
+## Decision
+
+`nit checkout <pin>` is branch-aware by default.
+
+- Dirty member worktrees still fail unless `--exact` is passed.
+- If the pinned commit is the tip of a local branch, Nit checks out that branch.
+- If the pinned commit is the tip of a remote branch and the local branch is
+  missing, Nit creates a tracking branch and checks it out.
+- If the local branch exists and can fast-forward to the pinned commit, Nit
+  fast-forwards it and checks it out.
+- If no safe branch points at the pinned commit, Nit detaches HEAD and prints a
+  warning that names the member and commit.
+- `--exact` cleans uncommitted work before materialization but does not secretly
+  reset the current branch ref to the pinned commit before detaching.
+
+## Consequences
+
+- Common pinned checkouts stay on normal Git branches.
+- Reproducible checkout still works for commits that are not branch tips.
+- Detached HEAD is explicit and visible instead of a hidden default.
+- Real push-resume and partial-landing reports remain separate work.

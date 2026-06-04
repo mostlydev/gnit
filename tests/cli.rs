@@ -403,6 +403,14 @@ fn push_and_checkout_workflow_reconstructs_missing_member() {
         std::fs::read_to_string(restored.join("vendor/sdk/lib.rs")).unwrap(),
         "pub fn sdk() -> &'static str { \"pushed\" }\n"
     );
+    assert_eq!(
+        git_out(
+            &restored.join("vendor/sdk"),
+            ["rev-parse", "--abbrev-ref", "HEAD"]
+        )
+        .trim(),
+        "master"
+    );
 
     std::fs::write(restored.join("vendor/sdk/lib.rs"), "dirty\n").unwrap();
     nit(&restored, ["checkout", "baseline"])
@@ -413,6 +421,214 @@ fn push_and_checkout_workflow_reconstructs_missing_member() {
         std::fs::read_to_string(restored.join("vendor/sdk/lib.rs")).unwrap(),
         "pub fn sdk() -> &'static str { \"pushed\" }\n"
     );
+}
+
+#[test]
+fn checkout_recreates_local_branch_from_remote_pin_hint() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+
+    std::fs::write(
+        workspace.join("vendor/sdk/lib.rs"),
+        "pub fn sdk() -> &'static str { \"branch-aware\" }\n",
+    )
+    .unwrap();
+    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    nit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
+    nit(workspace, ["push"]).success();
+
+    let root_remote = fixture.root_remote.to_str().unwrap();
+    let restored = fixture._temp.path().join("branch-restored");
+    let restored_path = restored.to_str().unwrap();
+    nit(
+        fixture._temp.path(),
+        ["clone", root_remote, restored_path, "--pin", "baseline"],
+    )
+    .success();
+
+    let sdk = restored.join("vendor/sdk");
+    git(&sdk, ["checkout", "--detach", "HEAD"]);
+    git(&sdk, ["branch", "-D", "master"]);
+
+    nit(&restored, ["checkout", "baseline"])
+        .success()
+        .stdout(predicate::str::contains("on master"));
+    assert_eq!(
+        git_out(&sdk, ["rev-parse", "--abbrev-ref", "HEAD"]).trim(),
+        "master"
+    );
+}
+
+#[test]
+fn checkout_prefers_hinted_remote_branch_over_other_local_branch_at_commit() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+
+    std::fs::write(
+        workspace.join("vendor/sdk/lib.rs"),
+        "pub fn sdk() -> &'static str { \"hinted\" }\n",
+    )
+    .unwrap();
+    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    nit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
+    nit(workspace, ["push"]).success();
+
+    let root_remote = fixture.root_remote.to_str().unwrap();
+    let restored = fixture._temp.path().join("hint-restored");
+    let restored_path = restored.to_str().unwrap();
+    nit(
+        fixture._temp.path(),
+        ["clone", root_remote, restored_path, "--pin", "baseline"],
+    )
+    .success();
+
+    let sdk = restored.join("vendor/sdk");
+    git(&sdk, ["checkout", "-b", "topic"]);
+    git(&sdk, ["branch", "-D", "master"]);
+
+    nit(&restored, ["checkout", "baseline"])
+        .success()
+        .stdout(predicate::str::contains("on master"));
+    assert_eq!(
+        git_out(&sdk, ["rev-parse", "--abbrev-ref", "HEAD"]).trim(),
+        "master"
+    );
+}
+
+#[test]
+fn checkout_fast_forwards_existing_local_branch_to_remote_pin_hint() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+
+    std::fs::write(
+        workspace.join("vendor/sdk/lib.rs"),
+        "pub fn sdk() -> &'static str { \"fast-forward\" }\n",
+    )
+    .unwrap();
+    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    nit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
+    nit(workspace, ["push"]).success();
+
+    let root_remote = fixture.root_remote.to_str().unwrap();
+    let restored = fixture._temp.path().join("ff-restored");
+    let restored_path = restored.to_str().unwrap();
+    nit(fixture._temp.path(), ["clone", root_remote, restored_path]).success();
+
+    let sdk = restored.join("vendor/sdk");
+    let remote_head = git_out(&sdk, ["rev-parse", "origin/master"]);
+    git(&sdk, ["reset", "--hard", "HEAD~1"]);
+
+    nit(&restored, ["checkout", "baseline"])
+        .success()
+        .stdout(predicate::str::contains("on master"));
+    assert_eq!(git_out(&sdk, ["rev-parse", "master"]), remote_head);
+    assert_eq!(
+        git_out(&sdk, ["rev-parse", "--abbrev-ref", "HEAD"]).trim(),
+        "master"
+    );
+}
+
+#[test]
+fn checkout_detaches_without_repointing_ahead_branch_by_default() {
+    let fixture = clean_workspace_with_sdk();
+    let workspace = fixture.root.as_path();
+    let sdk = workspace.join("vendor/sdk");
+
+    let baseline_head = git_out(&sdk, ["rev-parse", "HEAD"]);
+    nit(workspace, ["pin", "baseline"]).success();
+
+    std::fs::write(
+        sdk.join("lib.rs"),
+        "pub fn sdk() -> &'static str { \"ahead\" }\n",
+    )
+    .unwrap();
+    git(&sdk, ["add", "lib.rs"]);
+    git(&sdk, ["commit", "-m", "Ahead sdk"]);
+    let branch_head = git_out(&sdk, ["rev-parse", "master"]);
+
+    nit(workspace, ["checkout", "baseline"])
+        .success()
+        .stderr(predicate::str::contains("detached"));
+
+    assert_eq!(
+        git_out(&sdk, ["rev-parse", "--abbrev-ref", "HEAD"]).trim(),
+        "HEAD"
+    );
+    assert_eq!(git_out(&sdk, ["rev-parse", "HEAD"]), baseline_head);
+    assert_eq!(git_out(&sdk, ["rev-parse", "master"]), branch_head);
+}
+
+#[test]
+fn checkout_detaches_when_hinted_remote_cannot_fast_forward_local_branch() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+
+    std::fs::write(
+        workspace.join("vendor/sdk/lib.rs"),
+        "pub fn sdk() -> &'static str { \"remote\" }\n",
+    )
+    .unwrap();
+    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    nit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
+    nit(workspace, ["push"]).success();
+
+    let root_remote = fixture.root_remote.to_str().unwrap();
+    let restored = fixture._temp.path().join("diverged-restored");
+    let restored_path = restored.to_str().unwrap();
+    nit(fixture._temp.path(), ["clone", root_remote, restored_path]).success();
+
+    let sdk = restored.join("vendor/sdk");
+    let pinned_head = git_out(&sdk, ["rev-parse", "origin/master"]);
+    git(&sdk, ["reset", "--hard", "HEAD~1"]);
+    std::fs::write(
+        sdk.join("lib.rs"),
+        "pub fn sdk() -> &'static str { \"diverged\" }\n",
+    )
+    .unwrap();
+    git(&sdk, ["add", "lib.rs"]);
+    git(&sdk, ["commit", "-m", "Diverged sdk"]);
+    let branch_head = git_out(&sdk, ["rev-parse", "master"]);
+
+    nit(&restored, ["checkout", "baseline"])
+        .success()
+        .stderr(predicate::str::contains("cannot fast-forward"));
+
+    assert_eq!(
+        git_out(&sdk, ["rev-parse", "--abbrev-ref", "HEAD"]).trim(),
+        "HEAD"
+    );
+    assert_eq!(git_out(&sdk, ["rev-parse", "HEAD"]), pinned_head);
+    assert_eq!(git_out(&sdk, ["rev-parse", "master"]), branch_head);
+}
+
+#[test]
+fn exact_checkout_detaches_without_repointing_current_branch() {
+    let fixture = clean_workspace_with_sdk();
+    let workspace = fixture.root.as_path();
+    let sdk = workspace.join("vendor/sdk");
+
+    let baseline_head = git_out(&sdk, ["rev-parse", "HEAD"]);
+    nit(workspace, ["pin", "baseline"]).success();
+
+    std::fs::write(
+        sdk.join("lib.rs"),
+        "pub fn sdk() -> &'static str { \"later\" }\n",
+    )
+    .unwrap();
+    git(&sdk, ["add", "lib.rs"]);
+    git(&sdk, ["commit", "-m", "Later sdk"]);
+    let branch_head = git_out(&sdk, ["rev-parse", "master"]);
+
+    nit(workspace, ["checkout", "baseline", "--exact"])
+        .success()
+        .stderr(predicate::str::contains("detached"));
+
+    assert_eq!(
+        git_out(&sdk, ["rev-parse", "--abbrev-ref", "HEAD"]).trim(),
+        "HEAD"
+    );
+    assert_eq!(git_out(&sdk, ["rev-parse", "HEAD"]), baseline_head);
+    assert_eq!(git_out(&sdk, ["rev-parse", "master"]), branch_head);
 }
 
 #[test]

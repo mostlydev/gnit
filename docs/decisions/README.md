@@ -10,3 +10,4 @@ Locked product and architecture decisions for Nit.
 - [0006-rust-cli-and-updates.md](0006-rust-cli-and-updates.md)
 - [0007-legible-and-self-healing-workspace.md](0007-legible-and-self-healing-workspace.md)
 - [0008-cached-update-notice.md](0008-cached-update-notice.md)
+- [0009-branch-aware-checkout.md](0009-branch-aware-checkout.md)

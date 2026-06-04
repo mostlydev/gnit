@@ -44,6 +44,7 @@ nit clone git@github.com:example/product-workspace.git product --pin baseline
 `nit clone` clones the control repo and hydrates member repos from the roster.
 With `--pin`, it also materializes the selected Pin.
 
-Pinned checkout is intentionally exact. v0 materializes member commits in
-detached HEAD state and refuses to overwrite dirty member worktrees unless you
-use `nit checkout <pin> --exact`.
+Pinned checkout is intentionally exact, but it stays branch-aware. If the pinned
+commit is a local or remote branch tip, Nit checks out that branch instead of
+leaving you on a detached HEAD. It refuses to overwrite dirty member worktrees
+unless you use `nit checkout <pin> --exact`.

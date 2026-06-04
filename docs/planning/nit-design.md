@@ -1012,9 +1012,10 @@ Safe default behavior:
   clones-missing as part of materializing)
 - fetch required member refs when configured to do so
 - verify every pinned commit is reachable or explain what is missing
-- if the member is on the branch hint and clean, fast-forward or checkout safely
-- if the member would need a rewind, reset, or detached checkout, stop and show
-  the exact action
+- if the pinned commit is the tip of the branch hint, a local branch, or a
+  safely materializable remote branch, check out or fast-forward that branch
+- if no branch can represent the pinned commit safely, detach HEAD and warn
+  clearly instead of hiding the state
 - never discard local changes by default
 
 Exact mode:
@@ -1023,8 +1024,9 @@ Exact mode:
 nit checkout <pin> --exact
 ```
 
-`--exact` may detach HEAD or reset, but only with confirmation or agent policy.
-Detached HEAD is an explicit materialization mode, not a surprise.
+`--exact` may detach HEAD, reset uncommitted work, and clean untracked files, but
+it must not secretly rewind an existing branch ref to an older pin. Detached HEAD
+is an explicit materialization mode, not a surprise.
 
 Plain `git checkout` of the root/control repo can change the visible pin files,
 but it cannot materialize child repos. Nit owns cross-repo materialization. That
