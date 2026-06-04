@@ -481,6 +481,22 @@ fn upkeep_restores_missing_local_exclude() {
     );
 }
 
+#[test]
+fn status_includes_dirty_root_repo() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    // Only the workspace ROOT is dirty (staged + untracked); members are clean.
+    std::fs::write(ws.join("root_change.txt"), "x\n").unwrap();
+    git(ws, ["add", "root_change.txt"]);
+    std::fs::write(ws.join("root_untracked.txt"), "y\n").unwrap();
+
+    nit(ws, ["status"])
+        .success()
+        .stdout(predicate::str::contains("root"))
+        .stdout(predicate::str::contains("staged"))
+        .stdout(predicate::str::contains("untracked"));
+}
+
 fn git<const N: usize>(dir: &Path, args: [&str; N]) {
     let status = std::process::Command::new("git")
         .current_dir(dir)

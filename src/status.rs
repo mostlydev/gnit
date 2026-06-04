@@ -36,15 +36,23 @@ pub fn status() -> Result<()> {
         None => println!("Current pin: none"),
     }
 
-    if roster.members.is_empty() {
-        println!("\nMembers: none  (run `nit adopt <repo>` to add one)");
-    } else {
-        println!("\nMembers");
-        for member in &roster.members {
-            let member_root = root.join(&member.path);
-            let line = member_line(&member_root, member, current_pin.as_ref());
-            println!("  {:<10}  {}", member.id, line);
-        }
+    println!("\nMembers");
+    let mut listed = false;
+    // The root repo participates in commits and pins too, so show its own
+    // working-tree state first (excluding `.nit/`, which `nit add -A` excludes).
+    if git::is_git_repo_root(&root) {
+        let line = repo_line(&root, "root", true, current_pin.as_ref());
+        println!("  {:<10}  {}", "root", line);
+        listed = true;
+    }
+    for member in &roster.members {
+        let member_root = root.join(&member.path);
+        let line = repo_line(&member_root, &member.id, false, current_pin.as_ref());
+        println!("  {:<10}  {}", member.id, line);
+        listed = true;
+    }
+    if !listed {
+        println!("  (none yet -- run `nit adopt <repo>`)");
     }
 
     let discovered = discover_unadopted(&root, &roster);
@@ -58,19 +66,15 @@ pub fn status() -> Result<()> {
     Ok(())
 }
 
-fn member_line(
-    member_root: &Path,
-    member: &crate::metadata::RosterMember,
-    pin: Option<&Pin>,
-) -> String {
-    if !member_root.exists() {
+fn repo_line(repo_root: &Path, id: &str, is_root: bool, pin: Option<&Pin>) -> String {
+    if !repo_root.exists() {
         return "missing locally  -> nit checkout <pin>".to_string();
     }
-    if !git::is_git_repo_root(member_root) {
+    if !git::is_git_repo_root(repo_root) {
         return "not a git repo".to_string();
     }
 
-    let branch = git::output_in(member_root, ["rev-parse", "--abbrev-ref", "HEAD"])
+    let branch = git::output_in(repo_root, ["rev-parse", "--abbrev-ref", "HEAD"])
         .map(|b| b.trim().to_string())
         .unwrap_or_default();
     let on = if branch == "HEAD" || branch.is_empty() {
@@ -79,20 +83,41 @@ fn member_line(
         format!("on {branch}")
     };
 
-    let work = match git::output_in(member_root, ["status", "--porcelain"]) {
-        Ok(porcelain) => describe_worktree(&porcelain),
+    let work = match git::output_in(repo_root, ["status", "--porcelain"]) {
+        Ok(porcelain) => {
+            // The root tracks `.nit/` metadata; exclude it so the line reflects
+            // the root's *code* state, matching what `nit add -A`/`nit commit` do.
+            let text = if is_root {
+                porcelain
+                    .lines()
+                    .filter(|line| !is_nit_entry(line))
+                    .map(|line| format!("{line}\n"))
+                    .collect::<String>()
+            } else {
+                porcelain
+            };
+            describe_worktree(&text)
+        }
         Err(_) => "status unavailable".to_string(),
     };
 
     let drift = pin
-        .and_then(|pin| pin.members.iter().find(|m| m.id == member.id))
+        .and_then(|pin| pin.members.iter().find(|m| m.id == id))
         .and_then(|pinned| {
-            let head = git::output_in(member_root, ["rev-parse", "HEAD"]).ok()?;
+            let head = git::output_in(repo_root, ["rev-parse", "HEAD"]).ok()?;
             (head.trim() != pinned.commit).then_some("  drifted from pin")
         })
         .unwrap_or("");
 
     format!("{work}   {on}{drift}")
+}
+
+/// True for a `git status --porcelain` line whose path is the Nit metadata dir.
+fn is_nit_entry(porcelain_line: &str) -> bool {
+    porcelain_line
+        .get(3..)
+        .map(|path| path == ".nit" || path.starts_with(".nit/"))
+        .unwrap_or(false)
 }
 
 fn describe_worktree(porcelain: &str) -> String {

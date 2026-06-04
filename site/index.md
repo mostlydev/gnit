@@ -4,7 +4,7 @@ layout: home
 hero:
   name: Nit
   text: Multi-repo Git.
-  tagline: "Commit, pin, and check out one change across independent repos. The punchline: no submodules."
+  tagline: "Commit, pin, and check out one change across independent repos. Why? Because submodules can suck it."
   actions:
     - theme: brand
       text: Quickstart
