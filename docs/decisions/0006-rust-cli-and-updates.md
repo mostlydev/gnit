@@ -19,9 +19,10 @@ Nit follows the Clawdapus-style release path:
   replacing the binary.
 - `nit update` uses the same installer path.
 - `nit update` is the explicit binary replacement command.
-- Official release builds check for updates with a cached, best-effort check and
-  may print a notice. Dev builds and package-manager installs do not replace
-  themselves unless explicitly forced.
+- Official release builds read cached release metadata and may print a notice.
+  Stale metadata refresh is detached, bounded, and limited to interactive
+  official builds outside CI. Dev builds and package-manager installs do not
+  replace themselves unless explicitly forced.
 
 Every command may run non-destructive upkeep before doing its primary work:
 
@@ -29,7 +30,7 @@ Every command may run non-destructive upkeep before doing its primary work:
 - refresh generated helper files or shims
 - refresh cache/index state
 - rescan roster metadata
-- check cached release metadata without blocking command execution
+- read cached release metadata without blocking command execution
 
 There should be no manual equivalent of `rbenv rehash`. If Nit can safely infer
 and repair a stale generated artifact, it should do so.

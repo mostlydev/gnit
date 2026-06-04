@@ -42,6 +42,5 @@ calls to the hot path.
   stays fast.
 - Drift is computed against the newest pin; an explicit "current pin" pointer is
   deferred.
-- The transparent **update notice** (a cached "vX available" hint) is the next
-  increment; it is intentionally not in v0.2.0 because doing it safely requires a
-  cache + bounded network refresh that should not block the hot path.
+- The transparent **update notice** (a cached "vX available" hint) was deferred
+  from v0.2.0 and shipped separately in v0.3.0.

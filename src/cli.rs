@@ -136,6 +136,9 @@ pub enum Commands {
     },
     /// Update the nit binary from the latest GitHub release.
     Update {
+        /// Check the latest release and refresh cached release metadata.
+        #[arg(long, conflicts_with_all = ["dry_run", "force"])]
+        check: bool,
         /// Print the update action without running it.
         #[arg(long)]
         dry_run: bool,

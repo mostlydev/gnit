@@ -68,14 +68,23 @@ to `git` at first and keeps Git as the source of truth.
 - `nit log`: unified, newest-first timeline of Changes and Pins
 - real transparent upkeep: self-healing local-exclude repair on every command
   (fast, quiet, non-destructive, no network)
-- deferred: the cached "update available" notice (the safe, cache-backed version)
+
+## Phase 7: Cached Update Notice (v0.3.0)
+
+- official release builds read a local update cache on normal commands
+- if a newer release is cached, print a one-line `nit update` notice at most
+  once per day
+- if the cache is missing or stale, schedule a detached refresh with a bounded
+  GitHub Releases request only for interactive official builds outside CI
+- keep binary replacement explicit through `nit update`
+- expose `nit update --check` for an explicit metadata refresh
 
 ## Release And Update
 
 - GitHub Release assets for supported platforms.
 - `checksums.txt` verification.
-- `nit update`.
 - `nit update` explicit binary replacement once release assets exist.
+- `nit update --check` explicit release metadata check.
 - cached update notices for official binaries.
 - no self-update for dev builds unless forced.
 - signed releases before any default auto-install policy is reconsidered.

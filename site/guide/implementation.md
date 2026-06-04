@@ -8,8 +8,8 @@ source of truth for repository operations.
 
 The current slice implements workspace init/adoption, typed roster metadata,
 cross-repo staging, trailer-based Change commits and views, `land`, safe Pin
-checkout, ordered push, status/doctor, explicit update, and Pin recording for
-committed member HEADs.
+checkout, ordered push, status/doctor, explicit update, cached update notices,
+and Pin recording for committed member HEADs.
 
 ## Release Path
 
@@ -20,15 +20,19 @@ Nit follows the same release shape as Clawdapus:
 - `install.sh` installs the latest release.
 - `nit update` uses the same installer path.
 
-`nit update` is the explicit binary replacement command. Official binaries may
-check release metadata on a cached, best-effort schedule and print a notice. Dev
-builds and package-manager installs do not replace themselves unless forced.
+`nit update` is the explicit binary replacement command. `nit update --check`
+refreshes release metadata without replacing the binary. Official binaries may
+refresh that metadata on a cached, best-effort schedule and may print a notice.
+Dev builds and package-manager installs do not replace themselves unless forced.
 
 ## Transparent Upkeep
 
 Nit should not make users run maintenance commands that can be inferred safely.
 Every command may perform non-destructive upkeep first: local exclude repair,
-generated helper refresh, roster cache refresh, and release metadata checks.
+generated helper refresh, and roster cache refresh. Release metadata notices read
+a local cache only; stale-cache refreshes are detached, bounded, and limited to
+interactive official builds outside CI, so foreground commands do not wait on
+the network.
 
 Destructive or meaning-changing operations remain explicit.
 

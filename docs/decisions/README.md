@@ -8,3 +8,5 @@ Locked product and architecture decisions for Nit.
 - [0004-hooks-and-raw-git.md](0004-hooks-and-raw-git.md)
 - [0005-site-deployment.md](0005-site-deployment.md)
 - [0006-rust-cli-and-updates.md](0006-rust-cli-and-updates.md)
+- [0007-legible-and-self-healing-workspace.md](0007-legible-and-self-healing-workspace.md)
+- [0008-cached-update-notice.md](0008-cached-update-notice.md)

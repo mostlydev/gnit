@@ -37,7 +37,7 @@ fn doctor_runs() {
 
 #[test]
 fn status_outside_workspace_is_clear() {
-    let temp = tempfile::tempdir().unwrap();
+    let temp = tempdir_without_nit_ancestor();
     let mut cmd = Command::cargo_bin("nit").unwrap();
     cmd.current_dir(temp.path())
         .arg("status")
@@ -178,6 +178,57 @@ fn update_dry_run_shows_installer() {
         .success()
         .stdout(predicate::str::contains("mostlydev/nit"))
         .stdout(predicate::str::contains("install.sh"));
+}
+
+#[test]
+fn update_check_caches_latest_release_metadata() {
+    let temp = tempfile::tempdir().unwrap();
+    let latest = temp.path().join("latest.json");
+    let cache = temp.path().join("update-cache");
+    std::fs::write(
+        &latest,
+        r#"{"tag_name":"v9.9.9","html_url":"https://example.test/releases/v9.9.9"}"#,
+    )
+    .unwrap();
+
+    Command::cargo_bin("nit")
+        .unwrap()
+        .args(["update", "--check"])
+        .env(
+            "NIT_UPDATE_CHECK_URL",
+            format!("file://{}", latest.display()),
+        )
+        .env("NIT_UPDATE_CACHE_PATH", &cache)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("nit 9.9.9 is available"));
+
+    let text = std::fs::read_to_string(&cache).unwrap();
+    assert!(text.contains("latest_tag=v9.9.9"), "{text}");
+    assert!(text.contains("latest_version=9.9.9"), "{text}");
+    assert!(text.contains("checked_at="), "{text}");
+}
+
+#[test]
+fn update_check_failure_is_best_effort() {
+    let temp = tempfile::tempdir().unwrap();
+    let cache = temp.path().join("update-cache");
+    let missing = temp.path().join("missing.json");
+
+    Command::cargo_bin("nit")
+        .unwrap()
+        .args(["update", "--check"])
+        .env(
+            "NIT_UPDATE_CHECK_URL",
+            format!("file://{}", missing.display()),
+        )
+        .env("NIT_UPDATE_CHECK_TIMEOUT_SECS", "1")
+        .env("NIT_UPDATE_CACHE_PATH", &cache)
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("nit update check unavailable"));
+
+    assert!(!cache.exists(), "failed check should not write cache");
 }
 
 #[test]
@@ -568,6 +619,41 @@ fn git_dir_out<const N: usize>(git_dir: &Path, args: [&str; N]) -> String {
         String::from_utf8_lossy(&output.stderr)
     );
     String::from_utf8_lossy(&output.stdout).to_string()
+}
+
+fn tempdir_without_nit_ancestor() -> tempfile::TempDir {
+    let mut candidates = Vec::new();
+    if let Ok(cwd) = std::env::current_dir() {
+        if let Some(parent) = cwd.parent() {
+            candidates.push(parent.to_path_buf());
+        }
+    }
+    candidates.push(std::env::temp_dir());
+    candidates.push(PathBuf::from("/var/tmp"));
+    candidates.push(PathBuf::from("/tmp"));
+
+    for base in candidates {
+        if !base.is_dir() || has_nit_ancestor(&base) {
+            continue;
+        }
+        for _ in 0..8 {
+            if let Ok(temp) = tempfile::Builder::new()
+                .prefix("nit-outside-workspace-")
+                .tempdir_in(&base)
+            {
+                if !has_nit_ancestor(temp.path()) {
+                    return temp;
+                }
+            }
+        }
+    }
+
+    panic!("could not create a tempdir without a .nit ancestor");
+}
+
+fn has_nit_ancestor(path: &Path) -> bool {
+    path.ancestors()
+        .any(|ancestor| ancestor.join(".nit").exists())
 }
 
 fn nit_output<const N: usize>(dir: &Path, args: [&str; N]) -> String {

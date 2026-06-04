@@ -26,6 +26,7 @@ nit change show <id>
 nit change log [<id>]
 nit change diff <id>
 nit update --dry-run
+nit update --check
 ```
 
 The implemented CLI can create a workspace, adopt existing repos, preserve local
@@ -80,6 +81,12 @@ the root repo's local `.git/info/exclude` from the roster (local excludes are no
 committed, so a fresh clone needs them reapplied). It is fast, silent on a no-op,
 and hits no network. Disable it with `--no-upkeep` or `NIT_NO_UPKEEP=1`.
 
+Official release builds also keep a cached update notice. Normal commands read
+only the local cache; if it is stale, Nit may schedule a bounded background
+refresh and keeps going. That refresh only runs for interactive official builds
+outside CI. A newer cached version prints a one-line `nit update` hint at most
+once per day. Disable upkeep with `--no-upkeep` or `NIT_NO_UPKEEP=1`.
+
 `nit update` follows the release installer path and is the explicit update
-command. Nit does not auto-update; a cached "update available" notice is a planned
-increment.
+command. `nit update --check` refreshes release metadata without replacing the
+binary. Nit does not auto-update.

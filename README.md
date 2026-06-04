@@ -28,7 +28,10 @@ It requires `git` and `curl`. Verify the install with:
 nit doctor
 ```
 
-Update later with `nit update`, which re-runs the verified installer. Nit never
+Update later with `nit update`, which re-runs the verified installer. Use
+`nit update --check` to refresh cached release metadata explicitly. Official
+release builds may print a one-line cached hint when a newer release is
+available, but dev, CI, and noninteractive runs stay quiet. Nit never
 auto-updates; it only updates when you ask.
 
 ## Quickstart

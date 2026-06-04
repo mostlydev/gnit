@@ -27,6 +27,9 @@ fn main() -> Result<()> {
     if !cli.no_upkeep && !matches!(cli.command, Commands::Update { .. }) {
         upkeep::run_transparent_upkeep(cli.verbose);
     }
+    if !cli.no_upkeep && !matches!(cli.command, Commands::Update { .. }) {
+        update::maybe_print_update_notice(cli.verbose);
+    }
 
     match cli.command {
         Commands::Clone { url, path, pin } => clone::clone_workspace(url, path, pin),
@@ -69,6 +72,16 @@ fn main() -> Result<()> {
         },
         Commands::Push { resume } => push::push(resume),
         Commands::Review { target } => review::review(target),
-        Commands::Update { dry_run, force } => update::run(dry_run, force),
+        Commands::Update {
+            check,
+            dry_run,
+            force,
+        } => {
+            if check {
+                update::check()
+            } else {
+                update::run(dry_run, force)
+            }
+        }
     }
 }
