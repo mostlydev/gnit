@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: Nit
-  text: One change. Many repos. No submodules.
-  tagline: Commit, pin, and check out changes that span independent Git repos. Why? Because git submodules can suck it.
+  text: Multi-repo Git.
+  tagline: "Commit, pin, and check out one change across independent repos. The punchline: no submodules."
   actions:
     - theme: brand
       text: Quickstart
