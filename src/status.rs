@@ -9,9 +9,9 @@ use crate::git;
 use crate::metadata::{Pin, Roster, PINS_DIR};
 use crate::workspace;
 
-/// Rich, grouped `nit status`: per-member staged/unstaged/untracked counts,
-/// branch, missing members, drift from the current pin, and discovered-but-
-/// unadopted nested repos. Falls back to a clear message outside a workspace.
+/// Rich, grouped `nit status`: root/member staged/unstaged/untracked counts,
+/// branch, missing members, member drift from the current pin, and discovered-
+/// but-unadopted nested repos. Falls back to a clear message outside a workspace.
 pub fn status() -> Result<()> {
     let cwd = env::current_dir()?;
     let Some(root) = workspace::find_nit_workspace(&cwd) else {
@@ -36,10 +36,10 @@ pub fn status() -> Result<()> {
         None => println!("Current pin: none"),
     }
 
-    println!("\nMembers");
+    println!("\nRepos");
     let mut listed = false;
-    // The root repo participates in commits and pins too, so show its own
-    // working-tree state first (excluding `.nit/`, which `nit add -A` excludes).
+    // The root repo participates in workspace commits, so show its own state
+    // first. `.nit/` metadata stays out of this line to match `nit add -A`.
     if git::is_git_repo_root(&root) {
         let line = repo_line(&root, "root", true, current_pin.as_ref());
         println!("  {:<10}  {}", "root", line);

@@ -62,8 +62,9 @@ to `git` at first and keeps Git as the source of truth.
 
 ## Phase 6: Legible And Self-Healing Workspace (v0.2.0)
 
-- rich `nit status`: per-member staged/modified/untracked counts, branch,
-  missing members, drift from the current pin, and discovered-but-unadopted repos
+- rich `nit status`: root and per-member staged/modified/untracked counts,
+  branch, missing members, member drift from the current pin, and
+  discovered-but-unadopted repos
 - `nit log`: unified, newest-first timeline of Changes and Pins
 - real transparent upkeep: self-healing local-exclude repair on every command
   (fast, quiet, non-destructive, no network)

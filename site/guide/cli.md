@@ -69,9 +69,9 @@ worktrees unless `--exact` is passed. v0 uses detached checkout for pinned
 commits; treat it as reproducible materialization, not a place to continue
 normal branch work.
 
-`nit status` is grouped and legible: per member it shows staged / modified /
-untracked counts, the branch, `missing locally`, and `drifted from pin`, plus any
-discovered-but-unadopted nested repos. `nit log` renders one newest-first
+`nit status` is grouped and legible: it shows root and member staged / modified /
+untracked counts, the branch, `missing locally`, member `drifted from pin`, plus
+any discovered-but-unadopted nested repos. `nit log` renders one newest-first
 timeline of Changes and Pins across the workspace — the retrievable shared graph
 as a single command.
 

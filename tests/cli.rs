@@ -122,7 +122,7 @@ fn init_and_adopt_nested_repo_workflow_preserves_root_staging() {
         .current_dir(workspace)
         .assert()
         .success()
-        .stdout(predicate::str::contains("Members"))
+        .stdout(predicate::str::contains("Repos"))
         .stdout(predicate::str::contains("sdk"))
         .stdout(predicate::str::contains("clean"));
 
@@ -490,11 +490,23 @@ fn status_includes_dirty_root_repo() {
     git(ws, ["add", "root_change.txt"]);
     std::fs::write(ws.join("root_untracked.txt"), "y\n").unwrap();
 
-    nit(ws, ["status"])
-        .success()
-        .stdout(predicate::str::contains("root"))
-        .stdout(predicate::str::contains("staged"))
-        .stdout(predicate::str::contains("untracked"));
+    let output = nit_output(ws, ["status"]);
+    let root_line = output
+        .lines()
+        .find(|line| line.trim_start().starts_with("root"))
+        .unwrap_or_else(|| panic!("missing root repo status line:\n{output}"));
+    assert!(
+        root_line.contains("1 staged") && root_line.contains("1 untracked"),
+        "root line should report staged and untracked changes:\n{output}"
+    );
+    let sdk_line = output
+        .lines()
+        .find(|line| line.trim_start().starts_with("sdk"))
+        .unwrap_or_else(|| panic!("missing sdk status line:\n{output}"));
+    assert!(
+        sdk_line.contains("clean"),
+        "member should stay clean while only root is dirty:\n{output}"
+    );
 }
 
 fn git<const N: usize>(dir: &Path, args: [&str; N]) {
@@ -553,6 +565,23 @@ fn git_dir_out<const N: usize>(git_dir: &Path, args: [&str; N]) -> String {
         "git --git-dir {} {:?} failed: {}",
         git_dir.display(),
         args,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).to_string()
+}
+
+fn nit_output<const N: usize>(dir: &Path, args: [&str; N]) -> String {
+    let output = Command::cargo_bin("nit")
+        .unwrap()
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "nit {:?} failed in {}: {}",
+        args,
+        dir.display(),
         String::from_utf8_lossy(&output.stderr)
     );
     String::from_utf8_lossy(&output.stdout).to_string()

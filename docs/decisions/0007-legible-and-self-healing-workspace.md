@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted. Shipped in v0.2.0.
+Accepted. Shipped in v0.2.0; root repository status was added in v0.2.1 and
+documented in v0.2.2.
 
 ## Context
 
@@ -15,11 +16,12 @@ v0.1.0 shipped the full publish/reproduce flow, but two commands were minimal:
 v0.2.0 makes the workspace legible and self-healing, without adding network
 calls to the hot path.
 
-- **Rich `nit status`** reports, per member: staged / modified / untracked
-  counts, the current branch (or `detached`), `missing locally`, and
-  `drifted from pin` (member HEAD vs the newest pin's recorded commit). It also
-  lists **discovered-but-unadopted** nested repos with adopt/ignore hints. The
-  "current pin" is the newest pin by id (ids embed a creation timestamp).
+- **Rich `nit status`** reports the workspace root and each member: staged /
+  modified / untracked counts and the current branch (or `detached`). Members
+  also report `missing locally` and `drifted from pin` (member HEAD vs the newest
+  pin's recorded commit). It also lists **discovered-but-unadopted** nested repos
+  with adopt/ignore hints. The "current pin" is the newest pin by id (ids embed a
+  creation timestamp).
 
 - **`nit log`** renders one interleaved, newest-first timeline of Changes
   (reconstructed from `Nit-Change-Id` trailers across members) and Pins, each
