@@ -122,8 +122,9 @@ fn init_and_adopt_nested_repo_workflow_preserves_root_staging() {
         .current_dir(workspace)
         .assert()
         .success()
-        .stdout(predicate::str::contains("Members:"))
-        .stdout(predicate::str::contains("sdk  vendor/sdk"));
+        .stdout(predicate::str::contains("Members"))
+        .stdout(predicate::str::contains("sdk"))
+        .stdout(predicate::str::contains("clean"));
 
     Command::cargo_bin("nit")
         .unwrap()
@@ -426,6 +427,58 @@ fn import_submodule_workflow_converts_gitlink_to_member() {
     assert!(!modules.contains("vendor/sub"));
     let last_commit = git_out(&workspace, ["log", "-1", "--pretty=%s"]);
     assert_eq!(last_commit.trim(), "Import Nit member vendor/sub");
+}
+
+#[test]
+fn status_reports_member_state_and_discovered() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    std::fs::write(ws.join("vendor/sdk/new.txt"), "x\n").unwrap();
+    std::fs::create_dir_all(ws.join("scratch")).unwrap();
+    git(&ws.join("scratch"), ["init"]);
+
+    nit(ws, ["status"])
+        .success()
+        .stdout(predicate::str::contains("sdk"))
+        .stdout(predicate::str::contains("untracked"))
+        .stdout(predicate::str::contains("Discovered (not adopted)"))
+        .stdout(predicate::str::contains("scratch"));
+}
+
+#[test]
+fn log_interleaves_changes_and_pins() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    std::fs::write(ws.join("vendor/sdk/lib.rs"), "pub fn v() {}\n").unwrap();
+    nit(ws, ["add", "vendor/sdk/lib.rs"]);
+    nit(ws, ["land", "release", "-m", "Ship it"]).success();
+
+    nit(ws, ["log"])
+        .success()
+        .stdout(predicate::str::contains("change NCH-"))
+        .stdout(predicate::str::contains("pin    release"));
+}
+
+#[test]
+fn upkeep_restores_missing_local_exclude() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    let exclude = ws.join(".git/info/exclude");
+    let text = std::fs::read_to_string(&exclude).unwrap();
+    let stripped: String = text
+        .lines()
+        .filter(|line| *line != "vendor/sdk")
+        .map(|line| format!("{line}\n"))
+        .collect();
+    std::fs::write(&exclude, stripped).unwrap();
+
+    // Any command runs transparent upkeep, which restores the local exclude.
+    nit(ws, ["status"]).success();
+    let restored = std::fs::read_to_string(&exclude).unwrap();
+    assert!(
+        restored.lines().any(|line| line == "vendor/sdk"),
+        "upkeep should restore the local exclude: {restored}"
+    );
 }
 
 fn git<const N: usize>(dir: &Path, args: [&str; N]) {

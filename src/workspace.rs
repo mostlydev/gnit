@@ -183,30 +183,6 @@ pub fn import_submodule(path: PathBuf, id: Option<String>) -> Result<()> {
     Ok(())
 }
 
-pub fn status() -> Result<()> {
-    let cwd = env::current_dir()?;
-    if let Some(root) = find_nit_workspace(&cwd) {
-        let roster = Roster::read(&root)?;
-        println!("Workspace {}", root.display());
-        if roster.members.is_empty() {
-            println!("Members: none");
-        } else {
-            println!("Members:");
-            for member in roster.members {
-                println!("  {}  {}", member.id, member.path);
-            }
-        }
-        return Ok(());
-    }
-
-    println!("No Nit workspace found.");
-    if let Some(root) = git::root(&cwd) {
-        println!("Git root: {}", root.display());
-    }
-    println!("Run `nit init` to create one.");
-    Ok(())
-}
-
 pub fn find_nit_workspace(start: &Path) -> Option<PathBuf> {
     for dir in start.ancestors() {
         if dir.join(ROSTER_PATH).exists() {
@@ -230,33 +206,41 @@ fn relative_to(root: &Path, path: &Path) -> Result<PathBuf> {
         .with_context(|| format!("{} is outside workspace {}", path.display(), root.display()))
 }
 
-pub(crate) fn repair_required_excludes(root: &Path, roster: &Roster) -> Result<()> {
+/// Reapply the roster's required member excludes and ignored paths to the root
+/// repo's local `.git/info/exclude`. Returns the number of entries added; only
+/// writes when something was missing, so it is a cheap no-op on a healthy tree.
+pub(crate) fn repair_required_excludes(root: &Path, roster: &Roster) -> Result<usize> {
     let exclude = root.join(".git/info/exclude");
     if !exclude.exists() {
-        return Ok(());
+        return Ok(0);
     }
 
     let mut text = fs::read_to_string(&exclude).unwrap_or_default();
+    let mut added = 0;
     for member in &roster.members {
         for entry in &member.required_excludes {
-            append_exclude(&mut text, entry);
+            added += append_exclude(&mut text, entry);
         }
     }
     for entry in &roster.ignored {
-        append_exclude(&mut text, entry);
+        added += append_exclude(&mut text, entry);
     }
-    fs::write(exclude, text).context("write git exclude")
+    if added > 0 {
+        fs::write(exclude, text).context("write git exclude")?;
+    }
+    Ok(added)
 }
 
-fn append_exclude(text: &mut String, entry: &str) {
+fn append_exclude(text: &mut String, entry: &str) -> usize {
     if text.lines().any(|line| line == entry) {
-        return;
+        return 0;
     }
     if !text.is_empty() && !text.ends_with('\n') {
         text.push('\n');
     }
     text.push_str(entry);
     text.push('\n');
+    1
 }
 
 fn report_member_health(root: &Path, roster: &Roster) -> Result<()> {

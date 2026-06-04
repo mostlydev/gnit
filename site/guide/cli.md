@@ -17,6 +17,7 @@ nit checkout <pin> [--exact]
 nit push [--resume]
 nit review <change-id|pin>
 nit status
+nit log
 nit doctor
 nit pin <name>
 nit pin <name> --change <change-id>
@@ -68,6 +69,17 @@ worktrees unless `--exact` is passed. v0 uses detached checkout for pinned
 commits; treat it as reproducible materialization, not a place to continue
 normal branch work.
 
+`nit status` is grouped and legible: per member it shows staged / modified /
+untracked counts, the branch, `missing locally`, and `drifted from pin`, plus any
+discovered-but-unadopted nested repos. `nit log` renders one newest-first
+timeline of Changes and Pins across the workspace — the retrievable shared graph
+as a single command.
+
+Every command first runs a transparent, non-destructive upkeep pass that repairs
+the root repo's local `.git/info/exclude` from the roster (local excludes are not
+committed, so a fresh clone needs them reapplied). It is fast, silent on a no-op,
+and hits no network. Disable it with `--no-upkeep` or `NIT_NO_UPKEEP=1`.
+
 `nit update` follows the release installer path and is the explicit update
-command. Official release builds may also self-update transparently after a
-verified release check.
+command. Nit does not auto-update; a cached "update available" notice is a planned
+increment.

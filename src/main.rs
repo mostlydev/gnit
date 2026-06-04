@@ -3,10 +3,12 @@ mod checkout;
 mod cli;
 mod clone;
 mod git;
+mod log;
 mod metadata;
 mod pin;
 mod push;
 mod review;
+mod status;
 mod update;
 mod upkeep;
 mod workspace;
@@ -45,7 +47,8 @@ fn main() -> Result<()> {
         Commands::Ignore { paths } => workspace::ignore(paths),
         Commands::ImportSubmodule { path, id } => workspace::import_submodule(path, id),
         Commands::Doctor => workspace::doctor(),
-        Commands::Status => workspace::status(),
+        Commands::Status => status::status(),
+        Commands::Log => log::workspace_log(),
         Commands::Pin {
             name,
             change,

@@ -48,7 +48,8 @@ nit push                 # publish members first, then workspace metadata
 nit land -m "Release the new field"   # commit + pin together
 nit push
 
-nit status               # workspace and members
+nit status               # members, staged/modified/untracked, pin drift, discovered repos
+nit log                  # unified timeline of changes and pins
 nit change show <id>     # the commits that make up a change
 nit review <id-or-pin>   # combined review artifact
 ```

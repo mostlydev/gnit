@@ -105,6 +105,8 @@ pub enum Commands {
     Doctor,
     /// Show the current Nit workspace state.
     Status,
+    /// Show the unified workspace timeline of Changes and Pins.
+    Log,
     /// Create a reproducible pin for committed member state.
     Pin {
         /// Optional human label for the pin.
