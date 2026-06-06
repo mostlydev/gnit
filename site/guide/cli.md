@@ -65,6 +65,13 @@ nit review <change|pin>
 `nit commit -m <msg>` followed by `nit pin <name>` when you intentionally want
 separate steps.
 
+`nit push` publishes members first and the workspace root/control repo last. It
+prints a report for every target: pushed, already landed, failed, not attempted,
+or held back. If a member fails, the root stays unpublished so Pins do not point
+at missing member commits. Retry with `nit push` or `nit push --resume`; both use
+the same strict ordered policy, and `--resume` is just the explicit retry
+spelling.
+
 `nit checkout <pin>` materializes exact member commits and refuses dirty member
 worktrees unless `--exact` is passed. When the pinned commit is the tip of a
 local branch, Nit checks out that branch. When it is the tip of a remote branch,

@@ -14,6 +14,15 @@ struct RemoteFixture {
     sdk_remote: PathBuf,
 }
 
+struct ThreeMemberRemoteFixture {
+    _temp: tempfile::TempDir,
+    root: PathBuf,
+    root_remote: PathBuf,
+    sdk_remote: PathBuf,
+    app_remote: PathBuf,
+    docs_remote: PathBuf,
+}
+
 #[test]
 fn help_describes_nit() {
     let mut cmd = Command::cargo_bin("nit").unwrap();
@@ -363,8 +372,9 @@ fn push_and_checkout_workflow_reconstructs_missing_member() {
     nit(workspace, ["push"]).success();
     nit(workspace, ["push", "--resume"])
         .success()
-        .stdout(predicate::str::contains("member sdk already pushed"))
-        .stdout(predicate::str::contains("workspace root already pushed"));
+        .stdout(predicate::str::contains("member sdk"))
+        .stdout(predicate::str::contains("workspace root"))
+        .stdout(predicate::str::contains("already landed"));
 
     let sdk_head = git_out(&workspace.join("vendor/sdk"), ["rev-parse", "HEAD"]);
     let root_head = git_out(workspace, ["rev-parse", "HEAD"]);
@@ -420,6 +430,172 @@ fn push_and_checkout_workflow_reconstructs_missing_member() {
     assert_eq!(
         std::fs::read_to_string(restored.join("vendor/sdk/lib.rs")).unwrap(),
         "pub fn sdk() -> &'static str { \"pushed\" }\n"
+    );
+}
+
+#[test]
+fn push_reports_partial_landing_and_resume_retries_in_order() {
+    let fixture = workspace_with_three_member_remotes();
+    let workspace = fixture.root.as_path();
+
+    std::fs::write(workspace.join("sdk/sdk.txt"), "sdk v2\n").unwrap();
+    std::fs::write(workspace.join("app/app.txt"), "app v2\n").unwrap();
+    std::fs::write(workspace.join("docs/docs.txt"), "docs v2\n").unwrap();
+    nit(workspace, ["add", "-A"]);
+    nit(workspace, ["land", "release", "-m", "Publish v2"]).success();
+
+    advance_remote(
+        fixture._temp.path(),
+        &fixture.app_remote,
+        "app-remote-advance",
+        "remote.txt",
+        "remote app change\n",
+    );
+
+    nit(workspace, ["push"])
+        .failure()
+        .stdout(predicate::str::contains("Push report:"))
+        .stdout(predicate::str::contains("member sdk"))
+        .stdout(predicate::str::contains("pushed"))
+        .stdout(predicate::str::contains("member app"))
+        .stdout(predicate::str::contains("failed: rejected"))
+        .stdout(predicate::str::contains("member docs"))
+        .stdout(predicate::str::contains("not attempted"))
+        .stdout(predicate::str::contains("workspace root"))
+        .stdout(predicate::str::contains("held back"))
+        .stderr(predicate::str::contains("push incomplete"));
+
+    assert_eq!(
+        git_dir_out(&fixture.sdk_remote, ["rev-parse", "master"]),
+        git_out(&workspace.join("sdk"), ["rev-parse", "HEAD"])
+    );
+    assert_ne!(
+        git_dir_out(&fixture.docs_remote, ["rev-parse", "master"]),
+        git_out(&workspace.join("docs"), ["rev-parse", "HEAD"])
+    );
+    assert_ne!(
+        git_dir_out(&fixture.root_remote, ["rev-parse", "master"]),
+        git_out(workspace, ["rev-parse", "HEAD"])
+    );
+
+    let app = workspace.join("app");
+    git(&app, ["fetch", "origin", "master"]);
+    git(&app, ["merge", "--no-edit", "FETCH_HEAD"]);
+
+    nit(workspace, ["push", "--resume"])
+        .success()
+        .stdout(predicate::str::contains(
+            "resuming ordered push from remote state",
+        ))
+        .stdout(predicate::str::contains("member sdk"))
+        .stdout(predicate::str::contains("already landed"))
+        .stdout(predicate::str::contains("member app"))
+        .stdout(predicate::str::contains("pushed"))
+        .stdout(predicate::str::contains("member docs"))
+        .stdout(predicate::str::contains("pushed"))
+        .stdout(predicate::str::contains("workspace root"))
+        .stdout(predicate::str::contains("pushed"))
+        .stdout(predicate::str::contains("push complete"));
+
+    assert_eq!(
+        git_dir_out(&fixture.app_remote, ["rev-parse", "master"]),
+        git_out(&workspace.join("app"), ["rev-parse", "HEAD"])
+    );
+    assert_eq!(
+        git_dir_out(&fixture.docs_remote, ["rev-parse", "master"]),
+        git_out(&workspace.join("docs"), ["rev-parse", "HEAD"])
+    );
+    assert_eq!(
+        git_dir_out(&fixture.root_remote, ["rev-parse", "master"]),
+        git_out(workspace, ["rev-parse", "HEAD"])
+    );
+}
+
+#[test]
+fn push_holds_root_when_pin_commit_was_rewritten_away() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+    let sdk = workspace.join("vendor/sdk");
+
+    std::fs::write(
+        sdk.join("lib.rs"),
+        "pub fn sdk() -> &'static str { \"pinned\" }\n",
+    )
+    .unwrap();
+    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    nit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
+    let pinned = git_out(&sdk, ["rev-parse", "HEAD"]);
+
+    git(&sdk, ["reset", "--hard", "HEAD~1"]);
+    std::fs::write(
+        sdk.join("lib.rs"),
+        "pub fn sdk() -> &'static str { \"rewritten\" }\n",
+    )
+    .unwrap();
+    git(&sdk, ["add", "lib.rs"]);
+    git(&sdk, ["commit", "-m", "Rewrite sdk update"]);
+
+    nit(workspace, ["push"])
+        .failure()
+        .stdout(predicate::str::contains("member sdk"))
+        .stdout(predicate::str::contains("pushed"))
+        .stdout(predicate::str::contains("workspace root"))
+        .stdout(predicate::str::contains("held back"))
+        .stdout(predicate::str::contains(
+            "pin baseline references member sdk",
+        ))
+        .stdout(predicate::str::contains(&pinned.trim()[..12]))
+        .stderr(predicate::str::contains("push incomplete"));
+
+    assert_ne!(
+        git_dir_out(&fixture.root_remote, ["rev-parse", "master"]),
+        git_out(workspace, ["rev-parse", "HEAD"])
+    );
+
+    remove_pins_with_label(workspace, "baseline");
+    git(workspace, ["add", "-A", ".nit/pins"]);
+    git(workspace, ["commit", "-m", "Remove orphaned pin"]);
+    nit(workspace, ["pin", "recovered"]).success();
+
+    nit(workspace, ["push", "--resume"])
+        .success()
+        .stdout(predicate::str::contains("member sdk"))
+        .stdout(predicate::str::contains("already landed"))
+        .stdout(predicate::str::contains("workspace root"))
+        .stdout(predicate::str::contains("pushed"))
+        .stdout(predicate::str::contains("push complete"));
+
+    assert_eq!(
+        git_dir_out(&fixture.root_remote, ["rev-parse", "master"]),
+        git_out(workspace, ["rev-parse", "HEAD"])
+    );
+}
+
+#[test]
+fn push_ignores_retained_pins_for_retired_missing_members() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+    let sdk = workspace.join("vendor/sdk");
+
+    nit(workspace, ["pin", "baseline"]).success();
+    std::fs::write(
+        workspace.join(".nit/roster.yaml"),
+        "version: 1\nmode: shared\nmembers: []\n",
+    )
+    .unwrap();
+    git(workspace, ["add", ".nit/roster.yaml"]);
+    git(workspace, ["commit", "-m", "Retire sdk"]);
+    std::fs::remove_dir_all(&sdk).unwrap();
+
+    nit(workspace, ["push"])
+        .success()
+        .stdout(predicate::str::contains("workspace root"))
+        .stdout(predicate::str::contains("pushed"))
+        .stdout(predicate::str::contains("pin baseline").not());
+
+    assert_eq!(
+        git_dir_out(&fixture.root_remote, ["rev-parse", "master"]),
+        git_out(workspace, ["rev-parse", "HEAD"])
     );
 }
 
@@ -975,6 +1151,92 @@ fn workspace_with_remotes() -> RemoteFixture {
         root,
         root_remote,
         sdk_remote,
+    }
+}
+
+fn workspace_with_three_member_remotes() -> ThreeMemberRemoteFixture {
+    let temp = tempfile::tempdir().unwrap();
+    let remotes = temp.path().join("remotes");
+    std::fs::create_dir_all(&remotes).unwrap();
+    let root_remote = remotes.join("root.git");
+    let sdk_remote = remotes.join("sdk.git");
+    let app_remote = remotes.join("app.git");
+    let docs_remote = remotes.join("docs.git");
+    for remote in [&root_remote, &sdk_remote, &app_remote, &docs_remote] {
+        git(temp.path(), ["init", "--bare", remote.to_str().unwrap()]);
+    }
+
+    let root = temp.path().join("workspace");
+    std::fs::create_dir(&root).unwrap();
+    git(&root, ["init"]);
+    git(&root, ["config", "user.email", "nit-test@example.com"]);
+    git(&root, ["config", "user.name", "Nit Test"]);
+    git(
+        &root,
+        ["remote", "add", "origin", root_remote.to_str().unwrap()],
+    );
+    std::fs::write(root.join("README.md"), "root\n").unwrap();
+    git(&root, ["add", "README.md"]);
+    git(&root, ["commit", "-m", "Initial root"]);
+    git(&root, ["push", "origin", "HEAD"]);
+
+    create_member_repo(&root, "sdk", &sdk_remote, "sdk.txt", "sdk v1\n");
+    create_member_repo(&root, "app", &app_remote, "app.txt", "app v1\n");
+    create_member_repo(&root, "docs", &docs_remote, "docs.txt", "docs v1\n");
+
+    nit(&root, ["init"]);
+    nit(&root, ["adopt", "sdk", "--id", "sdk"]);
+    nit(&root, ["adopt", "app", "--id", "app"]);
+    nit(&root, ["adopt", "docs", "--id", "docs"]);
+
+    ThreeMemberRemoteFixture {
+        _temp: temp,
+        root,
+        root_remote,
+        sdk_remote,
+        app_remote,
+        docs_remote,
+    }
+}
+
+fn create_member_repo(root: &Path, path: &str, remote: &Path, file: &str, content: &str) {
+    let member = root.join(path);
+    std::fs::create_dir_all(&member).unwrap();
+    git(&member, ["init"]);
+    git(&member, ["config", "user.email", "nit-test@example.com"]);
+    git(&member, ["config", "user.name", "Nit Test"]);
+    git(
+        &member,
+        ["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    std::fs::write(member.join(file), content).unwrap();
+    git(&member, ["add", file]);
+    git(&member, ["commit", "-m", "Initial member"]);
+    git(&member, ["push", "origin", "HEAD"]);
+}
+
+fn advance_remote(base: &Path, remote: &Path, dirname: &str, file: &str, content: &str) {
+    let clone = base.join(dirname);
+    git_args(
+        base,
+        &["clone", remote.to_str().unwrap(), clone.to_str().unwrap()],
+    );
+    git(&clone, ["config", "user.email", "nit-test@example.com"]);
+    git(&clone, ["config", "user.name", "Nit Test"]);
+    std::fs::write(clone.join(file), content).unwrap();
+    git(&clone, ["add", file]);
+    git(&clone, ["commit", "-m", "Advance remote"]);
+    git(&clone, ["push", "origin", "HEAD"]);
+}
+
+fn remove_pins_with_label(root: &Path, label: &str) {
+    let pins_dir = root.join(".nit/pins");
+    for entry in std::fs::read_dir(&pins_dir).unwrap() {
+        let path = entry.unwrap().path();
+        let text = std::fs::read_to_string(&path).unwrap();
+        if text.lines().any(|line| line == format!("label: {label}")) {
+            std::fs::remove_file(path).unwrap();
+        }
     }
 }
 

@@ -56,7 +56,8 @@ to `git` at first and keeps Git as the source of truth.
 ## Phase 5: Push, Review, Doctor
 
 - ordered `nit push`
-- `nit push --resume`
+- strict `nit push --resume` retry
+- partial-landing reports
 - `nit review`
 - `nit doctor` recovery for trailers, pins, excludes, and remote drift
 
@@ -86,6 +87,15 @@ to `git` at first and keeps Git as the source of truth.
 - detach only when no branch points at the pinned commit, and warn clearly
 - avoid hidden branch ref rewrites in `nit checkout --exact`
 - harden cached-update parsing from the v0.3.0 third-party review
+
+## Phase 9: Strict Push Resume (v0.5.0)
+
+- report pushed, already-landed, failed, not-attempted, and held-back targets
+- keep `nit push` and `nit push --resume` on one strict ordered policy
+- use remote refs as the resume journal; do not write local push state
+- stop at the first member failure and hold root/control metadata back
+- block root/control push when a Pin references a member commit no longer
+  reachable from the member branch being published
 
 ## Release And Update
 

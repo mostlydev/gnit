@@ -32,4 +32,5 @@ lose track of new commits.
 - Common pinned checkouts stay on normal Git branches.
 - Reproducible checkout still works for commits that are not branch tips.
 - Detached HEAD is explicit and visible instead of a hidden default.
-- Real push-resume and partial-landing reports remain separate work.
+- Push-resume and partial-landing reports are covered separately in
+  [0010](0010-strict-push-resume.md).

@@ -676,23 +676,30 @@ Partial push: `sdk` lands but `app` is rejected mid-operation:
 
 ```console
 $ nit push
-preflight ok  (2 repos, 1 pin)
-  sdk   pushed 1 commit
-  app   ! rejected (non-fast-forward): remote has newer commits
-  pin   HELD BACK (members incomplete)
-partial landing: sdk pushed; app failed; pin not published.
+Push report:
+  sdk             pushed
+  app             failed: rejected (non-fast-forward)
+  docs            not attempted
+  workspace root  held back: members incomplete; root not published
+error: push incomplete; resolve failures and run `nit push --resume`
+
 resolve app, then run: nit push --resume
 
 $ # integrate origin/main into app, then:
 $ nit push --resume
-  app   pushed 1 commit
-  app   pushed pin commit
-done
+resuming ordered push from remote state
+Push report:
+  sdk             already landed
+  app             pushed
+  docs            pushed
+  workspace root  pushed
+push complete
 ```
 
 Nit pushed members first, and when `app` failed it **held the pin back** instead
 of publishing a pin that references an unpushed commit. `--resume` re-preflights
-and continues from the unfinished set; it never re-pushes what already landed.
+and continues from remote truth; it never re-pushes what already landed. It is a
+strict retry, not a best-effort "push everything possible" mode.
 
 Dangling pin: a member rebased away a pinned commit:
 

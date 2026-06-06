@@ -19,7 +19,10 @@ provenance so a workspace can be reconstructed later.
 
 `nit checkout <pin>` materializes a Pin safely. It fetches, verifies
 reachability, and refuses destructive resets unless `--exact` and policy allow
-them.
+them. When the pinned commit is the tip of a branch, Nit checks out that branch
+(creating or fast-forwarding a local branch from its remote when that is safe);
+when no branch points at the commit, it detaches HEAD and warns instead of
+hiding the state.
 
 ## Review
 

@@ -8,8 +8,9 @@ source of truth for repository operations.
 
 The current slice implements workspace init/adoption, typed roster metadata,
 cross-repo staging, trailer-based Change commits and views, `land`,
-branch-aware Pin checkout, ordered push, status/doctor, explicit update, cached
-update notices, and Pin recording for committed member HEADs.
+branch-aware Pin checkout, ordered push with strict retry reports,
+status/doctor, explicit update, cached update notices, and Pin recording for
+committed member HEADs.
 
 ## Release Path
 

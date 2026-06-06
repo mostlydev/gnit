@@ -30,6 +30,9 @@ nit push
 
 `nit land` is the human-facing publish verb. It commits staged member changes,
 creates an unnamed Pin, and lets `nit push` publish member commits before the Pin.
+If one member push fails, Nit reports what landed, leaves later targets
+not-attempted, and holds the workspace root back. After resolving the member
+repo, run `nit push` again, or use `nit push --resume` as an explicit retry.
 
 ```sh
 nit review <change-id-or-pin>

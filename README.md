@@ -57,6 +57,10 @@ nit change show <id>     # the commits that make up a change
 nit review <id-or-pin>   # combined review artifact
 ```
 
+`nit push` reports every target and is safe to retry. If a member fails, Nit
+holds the workspace metadata back; after fixing the member, run `nit push` again
+or `nit push --resume` for the explicit retry spelling.
+
 Reconstruct the workspace on another machine:
 
 ```sh
