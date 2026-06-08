@@ -5,6 +5,17 @@ across all of them at once. The Rust CLI now ships the v0 loop: construct a
 workspace, land a cross-repo change, push in dependency-safe order, clone it on a
 fresh machine, and review the combined artifact.
 
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mostlydev/nit/master/install.sh | sh
+```
+
+This downloads the latest release for your platform, verifies its SHA-256
+checksum, and installs `nit` to `~/.local/bin` (override with `NIT_INSTALL_DIR`).
+It needs `git` and `curl`. Verify the install with `nit doctor`, and update later
+with `nit update`.
+
 ## Create A Workspace
 
 ```sh
