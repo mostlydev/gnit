@@ -1,11 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 
 use crate::git;
+use crate::ids;
 use crate::metadata::Roster;
 use crate::pin;
 use crate::workspace;
@@ -181,7 +181,7 @@ pub fn ensure_exists(id: &str) -> Result<()> {
 fn commit_staged(root: &Path, message: &str) -> Result<String> {
     let roster = Roster::read(root)?;
     let repos = workspace_repos(root, &roster);
-    let change_id = generate_change_id();
+    let change_id = ids::change_id();
     let full_message = format!("{message}\n\n{TRAILER}: {change_id}");
     let mut committed = Vec::new();
 
@@ -357,14 +357,6 @@ fn print_change_commits(id: &str, commits: &[ChangeCommit]) {
             commit.subject
         );
     }
-}
-
-fn generate_change_id() -> String {
-    let millis = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time before unix epoch")
-        .as_millis();
-    format!("NCH-{millis}")
 }
 
 fn short(commit: &str) -> &str {

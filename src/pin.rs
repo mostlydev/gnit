@@ -1,10 +1,10 @@
 use std::env;
 use std::path::Path;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 
 use crate::git;
+use crate::ids;
 use crate::metadata::{Pin, PinMember, Roster};
 use crate::workspace;
 
@@ -27,7 +27,7 @@ pub fn create_with_changes(
     }
     ensure_clean(&root, "workspace root")?;
 
-    let mut pin = Pin::new(generate_id(label.as_deref()));
+    let mut pin = Pin::new(ids::pin_id(label.as_deref()));
     pin.label = label;
     pin.provenance.changes = changes;
 
@@ -75,42 +75,4 @@ fn ensure_clean(repo: &Path, name: &str) -> Result<()> {
         bail!("{name} has uncommitted changes");
     }
     Ok(())
-}
-
-fn generate_id(label: Option<&str>) -> String {
-    let millis = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time before unix epoch")
-        .as_millis();
-    match label.map(sanitize_label).filter(|label| !label.is_empty()) {
-        Some(label) => format!("PIN-{millis}-{label}"),
-        None => format!("PIN-{millis}"),
-    }
-}
-
-fn sanitize_label(label: &str) -> String {
-    label
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
-                ch.to_ascii_lowercase()
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>()
-        .trim_matches('-')
-        .to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn generated_id_includes_sanitized_label() {
-        let id = generate_id(Some("Release 2026.06"));
-        assert!(id.starts_with("PIN-"));
-        assert!(id.ends_with("-release-2026-06"));
-    }
 }

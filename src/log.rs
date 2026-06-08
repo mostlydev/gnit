@@ -168,3 +168,16 @@ fn date(secs: i64) -> String {
     let y = if m <= 2 { y + 1 } else { y };
     format!("{y:04}-{m:02}-{d:02}")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::metadata::Pin;
+
+    #[test]
+    fn pin_time_reads_millis_before_id_disambiguator() {
+        let pin = Pin::new("PIN-1760000000123-0000002a0000000000000007-baseline");
+
+        assert_eq!(pin_time(&pin), 1_760_000_000);
+    }
+}

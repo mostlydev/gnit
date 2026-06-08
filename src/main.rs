@@ -3,6 +3,7 @@ mod checkout;
 mod cli;
 mod clone;
 mod git;
+mod ids;
 mod log;
 mod metadata;
 mod pin;
