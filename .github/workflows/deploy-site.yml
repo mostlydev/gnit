@@ -21,11 +21,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # Pages is enabled out-of-band (Settings > Pages > Source = GitHub Actions,
       # or `gh api --method POST repos/<owner>/nit/pages -f build_type=workflow`).
       # The workflow's integration token cannot create the Pages site itself.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -41,7 +41,7 @@ jobs:
           # If a custom domain (e.g. nit.dev) is added later: set this to "/"
           # and add site/public/CNAME. The base is env-driven in config.mts.
           VITEPRESS_BASE: /nit/
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site/.vitepress/dist
 
@@ -54,5 +54,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
-
+        uses: actions/deploy-pages@v5
