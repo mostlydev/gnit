@@ -23,9 +23,22 @@ fn current_millis() -> u128 {
         .as_millis()
 }
 
+/// A compact tiebreaker for ids minted within the same millisecond. The process
+/// id separates concurrent `nit` invocations; the per-process counter separates
+/// ids minted back-to-back inside one invocation. Both are rendered in
+/// minimal-width hex (no zero padding), and the counter — almost always 0 for a
+/// single-id invocation — is omitted entirely when it is 0. A typical id is
+/// therefore just `NCH-<millis>-<pid hex>` (e.g. `NCH-1781013904682-72e5`); only
+/// a burst that mints several ids in one process grows a `-<counter hex>` suffix.
+/// The `-` before the counter keeps the (pid, counter) encoding unambiguous.
 fn disambiguator() -> String {
     let counter = NEXT_ID_COUNTER.fetch_add(1, Ordering::Relaxed);
-    format!("{:08x}{counter:016x}", process::id())
+    let pid = process::id();
+    if counter == 0 {
+        format!("{pid:x}")
+    } else {
+        format!("{pid:x}-{counter:x}")
+    }
 }
 
 fn sanitize_label(label: &str) -> String {
@@ -52,25 +65,29 @@ mod tests {
     #[test]
     fn change_ids_include_disambiguator_after_millis() {
         let id = change_id();
-        let parts = id.split('-').collect::<Vec<_>>();
+        let rest = id.strip_prefix("NCH-").expect("change id starts with NCH-");
+        let (millis, disambiguator) = rest
+            .split_once('-')
+            .expect("change id has millis and disambiguator segments");
 
-        assert_eq!(parts.len(), 3);
-        assert_eq!(parts[0], "NCH");
-        assert!(parts[1].parse::<u128>().is_ok());
-        assert_eq!(parts[2].len(), 24);
-        assert!(parts[2].chars().all(|ch| ch.is_ascii_hexdigit()));
+        assert!(millis.parse::<u128>().is_ok());
+        // The disambiguator leads with the process id in minimal-width hex (no
+        // zero padding), optionally followed by `-<counter hex>` in a burst.
+        let pid_token = disambiguator.split('-').next().expect("pid token");
+        assert!(!pid_token.is_empty());
+        assert!(pid_token.chars().all(|ch| ch.is_ascii_hexdigit()));
+        assert!(!pid_token.starts_with('0'), "pid hex should not be padded");
     }
 
     #[test]
     fn pin_ids_keep_millis_parseable_and_sanitize_label() {
         let id = pin_id(Some("Release 2026.06"));
-        let parts = id.split('-').collect::<Vec<_>>();
+        let rest = id.strip_prefix("PIN-").expect("pin id starts with PIN-");
+        let millis = rest.split('-').next().expect("millis segment");
 
         assert!(id.starts_with("PIN-"));
         assert!(id.ends_with("-release-2026-06"));
-        assert!(parts[1].parse::<u128>().is_ok());
-        assert_eq!(parts[2].len(), 24);
-        assert!(parts[2].chars().all(|ch| ch.is_ascii_hexdigit()));
+        assert!(millis.parse::<u128>().is_ok());
     }
 
     #[test]

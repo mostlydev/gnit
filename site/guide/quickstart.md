@@ -53,14 +53,14 @@ missing, and which checks are passing:
 
 ```text
 $ nit pr
-Workspace change NCH-1780970169140-000018d60000000000000000
+Workspace change NCH-1780970169140-18d6
 repo                         branch              base        pr        state     checks
 root (metadata)              feature/pr-flow     master      #1        open      pending
 sdk                          feature/pr-flow     master      #2        open      pass
 app                          feature/pr-flow     master      missing   -         -
 
 $ nit pr open
-Opening PRs for Change NCH-1780970169140-000018d60000000000000000
+Opening PRs for Change NCH-1780970169140-18d6
 Title: Add linked PR flow
 Mode: draft
   root                     already open

@@ -96,7 +96,7 @@ yet shows `missing`; a metadata-only root is labelled `root (metadata)`:
 
 ```text
 $ nit pr
-Workspace change NCH-1780970169140-000018d60000000000000000
+Workspace change NCH-1780970169140-18d6
 repo                         branch              base        pr        state     checks
 root (metadata)              feature/pr-flow     master      #1        open      pending
 sdk                          feature/pr-flow     master      #2        open      pass
@@ -109,7 +109,7 @@ duplicated:
 
 ```text
 $ nit pr open
-Opening PRs for Change NCH-1780970169140-000018d60000000000000000
+Opening PRs for Change NCH-1780970169140-18d6
 Title: Add linked PR flow
 Mode: draft
   root                     already open
@@ -134,7 +134,7 @@ guessing, naming the ids to pick from:
 
 ```text
 $ nit pr
-Error: multiple Nit Changes found on the PR branch (NCH-1780970236148-00002c2c0000000000000000, NCH-1780970236230-00002c780000000000000000); rerun with `nit pr --change <id>`
+Error: multiple Nit Changes found on the PR branch (NCH-1780970236148-2c2c, NCH-1780970236230-2c78); rerun with `nit pr --change <id>`
 ```
 
 `nit checkout <pin>` materializes exact member commits and refuses dirty member

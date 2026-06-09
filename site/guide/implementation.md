@@ -50,7 +50,7 @@ block between the markers is regenerated:
 
 ```markdown
 <!-- nit-pr-sync:start -->
-Nit-Change-Id: NCH-1780970169140-000018d60000000000000000
+Nit-Change-Id: NCH-1780970169140-18d6
 
 Workspace PR: acme/root#1
 
