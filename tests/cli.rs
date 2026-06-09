@@ -889,6 +889,95 @@ fn review_fetch_is_rejected_for_change_targets() {
 }
 
 #[test]
+fn change_discovery_uses_and_invalidates_ref_keyed_cache() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    let sdk = ws.join("vendor/sdk");
+
+    fs::write(sdk.join("lib.rs"), "pub fn sdk() { /* cached */ }\n").unwrap();
+    gnit(ws, ["add", "vendor/sdk/lib.rs"]);
+    let commit = gnit(ws, ["commit", "-m", "Cached change"]).success();
+    let change_id = parse_created_change(&commit);
+
+    let warm = gnit_output(ws, ["change", "log"]);
+    assert!(warm.contains(&change_id), "{warm}");
+    let cache_path = ws.join(".gnit/cache/changes-sdk.json");
+    assert!(
+        cache_path.exists(),
+        "discovery should persist a per-member cache"
+    );
+
+    // Tampering with the cached id while the ref-state key still matches
+    // proves the warm path reads the cache instead of rescanning.
+    let bogus_id = "GCH-1760000000000-cafe";
+    let tampered = fs::read_to_string(&cache_path)
+        .unwrap()
+        .replace(&change_id, bogus_id);
+    fs::write(&cache_path, tampered).unwrap();
+    let cached = gnit_output(ws, ["change", "log"]);
+    assert!(cached.contains(bogus_id), "{cached}");
+    assert!(!cached.contains(&change_id), "{cached}");
+
+    // Moving a ref invalidates the key; discovery rescans and the tampered
+    // entry disappears.
+    fs::write(sdk.join("lib.rs"), "pub fn sdk() { /* moved */ }\n").unwrap();
+    gnit(ws, ["add", "vendor/sdk/lib.rs"]);
+    let second = gnit(ws, ["commit", "-m", "Move refs"]).success();
+    let second_id = parse_created_change(&second);
+    let rescanned = gnit_output(ws, ["change", "log"]);
+    assert!(rescanned.contains(&change_id), "{rescanned}");
+    assert!(rescanned.contains(&second_id), "{rescanned}");
+    assert!(!rescanned.contains(bogus_id), "{rescanned}");
+}
+
+#[test]
+fn corrupt_discovery_cache_falls_back_to_scan() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    let sdk = ws.join("vendor/sdk");
+
+    fs::write(sdk.join("lib.rs"), "pub fn sdk() { /* corrupt */ }\n").unwrap();
+    gnit(ws, ["add", "vendor/sdk/lib.rs"]);
+    let commit = gnit(ws, ["commit", "-m", "Survives corruption"]).success();
+    let change_id = parse_created_change(&commit);
+
+    let cache_path = ws.join(".gnit/cache/changes-sdk.json");
+    gnit_output(ws, ["change", "log"]);
+    fs::write(&cache_path, "{ not json").unwrap();
+
+    let output = gnit_output(ws, ["change", "log"]);
+    assert!(output.contains(&change_id), "{output}");
+}
+
+#[test]
+fn discovery_cache_stays_local() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    gnit_output(ws, ["log"]);
+
+    assert!(ws.join(".gnit/cache").exists());
+    let tracked = git_out(ws, ["ls-files", ".gnit/cache"]);
+    assert!(
+        tracked.trim().is_empty(),
+        ".gnit/cache should stay untracked: {tracked}"
+    );
+    let exclude = fs::read_to_string(ws.join(".git/info/exclude")).unwrap();
+    assert!(
+        exclude.lines().any(|line| line == ".gnit/cache/"),
+        ".gnit/cache/ should be hidden by local excludes: {exclude}"
+    );
+    let status = gnit_output(ws, ["status"]);
+    let root_line = status
+        .lines()
+        .find(|line| line.trim_start().starts_with("root"))
+        .unwrap();
+    assert!(
+        root_line.contains("clean"),
+        "cache must not dirty root status: {status}"
+    );
+}
+
+#[test]
 fn commit_respects_index_and_leaves_unstaged_tracked_changes() {
     let fixture = clean_workspace_with_sdk();
     let workspace = fixture.root.as_path();

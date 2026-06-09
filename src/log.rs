@@ -4,9 +4,9 @@ use std::fs;
 
 use anyhow::{Context, Result};
 
+use crate::cache;
 use crate::git;
 use crate::metadata::{Pin, Roster, PINS_DIR};
-use crate::trailers;
 use crate::workspace;
 
 /// Unified, interleaved workspace timeline of Changes and Pins, newest first.
@@ -44,32 +44,16 @@ pub fn workspace_log() -> Result<()> {
         if !git::is_git_repo_root(repo_root) {
             continue;
         }
-        let log = git::output_in_args(repo_root, ["log", "--all", "--format=%ct%x1f%s%x1f%B%x1e"])
-            .unwrap_or_default();
-        for record in log.split('\x1e') {
-            let record = record.trim();
-            if record.is_empty() {
-                continue;
-            }
-            let mut fields = record.splitn(3, '\x1f');
-            let (Some(ct), Some(subject), Some(body)) =
-                (fields.next(), fields.next(), fields.next())
-            else {
-                continue;
-            };
-            let Some(change_id) = trailers::change_id(body) else {
-                continue;
-            };
-            let time: i64 = ct.trim().parse().unwrap_or(0);
-            let entry = changes.entry(change_id).or_insert(Change {
+        for cached in cache::change_commits(&root, repo_id, repo_root)? {
+            let entry = changes.entry(cached.change_id).or_insert(Change {
                 time: 0,
                 subject: String::new(),
                 repos: BTreeSet::new(),
             });
             entry.repos.insert(repo_id.clone());
-            if time >= entry.time {
-                entry.time = time;
-                entry.subject = subject.trim().to_string();
+            if cached.time >= entry.time {
+                entry.time = cached.time;
+                entry.subject = cached.subject;
             }
         }
     }

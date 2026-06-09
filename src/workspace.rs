@@ -303,6 +303,7 @@ pub(crate) fn repair_required_excludes(root: &Path, roster: &Roster) -> Result<u
     };
     let mut added = 0;
     added += append_exclude(&mut text, crate::lock::LOCK_EXCLUDE);
+    added += append_exclude(&mut text, crate::cache::CACHE_EXCLUDE);
     for member in &roster.members {
         for entry in &member.required_excludes {
             added += append_exclude(&mut text, entry);
@@ -455,6 +456,7 @@ fn commit_metadata_with_paths(root: &Path, message: &str, extra_paths: &[PathBuf
     ];
     status_args.extend(paths.iter().map(|path| path.as_os_str().to_os_string()));
     status_args.push(OsString::from(":(exclude).gnit/lock"));
+    status_args.push(OsString::from(":(exclude).gnit/cache"));
     let status = git::output_in_args(root, status_args)?;
     if !status.trim().is_empty() {
         // Pathspec-scope the commit so an unrelated staged change in the root
@@ -508,7 +510,9 @@ fn collect_metadata_files(root: &Path, rel: &Path, paths: &mut Vec<PathBuf>) -> 
 
     for entry in entries {
         let child_rel = rel.join(entry.file_name());
-        if child_rel == Path::new(crate::lock::LOCK_EXCLUDE) {
+        if child_rel == Path::new(crate::lock::LOCK_EXCLUDE)
+            || child_rel == Path::new(crate::cache::CACHE_DIR)
+        {
             continue;
         }
         let file_type = entry

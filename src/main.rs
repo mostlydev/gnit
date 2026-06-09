@@ -1,3 +1,4 @@
+mod cache;
 mod change;
 mod checkout;
 mod cli;

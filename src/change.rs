@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
 
+use crate::cache;
 use crate::git;
 use crate::ids;
 use crate::metadata::Roster;
@@ -131,7 +132,7 @@ pub fn log(id: Option<String>) -> Result<()> {
     let root = current_root()?;
     let roster = Roster::read(&root)?;
     let repos = workspace_repos(&root, &roster);
-    let commits = scan_change_commits(&repos)?;
+    let commits = scan_change_commits(&root, &repos)?;
 
     if let Some(id) = id {
         let commits = commits
@@ -186,7 +187,7 @@ fn commit_staged(root: &Path, message: &str, resume_change: Option<&str>) -> Res
             if !trailers::is_valid_change_id(id) {
                 bail!("{id} is not a valid change id");
             }
-            let known = scan_change_commits(&repos)?
+            let known = scan_change_commits(root, &repos)?
                 .into_iter()
                 .any(|(_, existing)| existing == id);
             if !known {
@@ -247,7 +248,7 @@ fn commits_for_change(id: &str) -> Result<Vec<ChangeCommit>> {
     let root = current_root()?;
     let roster = Roster::read(&root)?;
     let repos = workspace_repos(&root, &roster);
-    let commits = scan_change_commits(&repos)?
+    let commits = scan_change_commits(&root, &repos)?
         .into_iter()
         .filter(|(_, change_id)| change_id == id)
         .map(|(commit, _)| commit)
@@ -258,34 +259,19 @@ fn commits_for_change(id: &str) -> Result<Vec<ChangeCommit>> {
     Ok(commits)
 }
 
-fn scan_change_commits(repos: &[Repo]) -> Result<Vec<(ChangeCommit, String)>> {
+fn scan_change_commits(root: &Path, repos: &[Repo]) -> Result<Vec<(ChangeCommit, String)>> {
     let mut commits = Vec::new();
     for repo in repos {
-        let log = git::output_in_args(&repo.root, ["log", "--all", "--format=%H%x1f%s%x1f%B%x1e"])
-            .unwrap_or_default();
-        for record in log.split('\x1e') {
-            let record = record.trim();
-            if record.is_empty() {
-                continue;
-            }
-            let mut fields = record.splitn(3, '\x1f');
-            let Some(hash) = fields.next() else { continue };
-            let Some(subject) = fields.next() else {
-                continue;
-            };
-            let Some(body) = fields.next() else { continue };
-            let Some(change_id) = trailers::change_id(body) else {
-                continue;
-            };
+        for cached in cache::change_commits(root, &repo.id, &repo.root)? {
             commits.push((
                 ChangeCommit {
                     repo_id: repo.id.clone(),
                     repo_path: repo.path.clone(),
                     repo_root: repo.root.clone(),
-                    commit: hash.to_string(),
-                    subject: subject.to_string(),
+                    commit: cached.commit,
+                    subject: cached.subject,
                 },
-                change_id,
+                cached.change_id,
             ));
         }
     }
