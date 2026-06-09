@@ -41,11 +41,13 @@ rename happened and that pre-rename history reads `nit` in original commits.
 
 ## Consequences
 
-- Workspaces created before the rename are not auto-migrated. Migration is
-  manual: `mv .nit .gnit`, re-run `gnit doctor`. Commits carrying the old
-  `Nit-Change-Id` trailer and `NCH-` ids are not grouped by the renamed tool;
-  with zero external users this was judged cheaper than carrying legacy read
-  support indefinitely.
+- Workspaces created before the rename are not auto-migrated. `gnit migrate`
+  performs the one-time conversion explicitly: it moves `.nit/` to `.gnit/`,
+  replaces the legacy agent-guidance block, and commits the result; `gnit
+  doctor` detects legacy metadata or guidance and points at it. Commits
+  carrying the old `Nit-Change-Id` trailer and `NCH-` ids are not grouped by
+  the renamed tool; with zero external users this was judged cheaper than
+  carrying legacy read support indefinitely.
 - Old installed binaries (`nit`) and harness skill installs under the old name
   must be removed by hand; `gnit skills install` lays down the renamed skill.
 - Releases prior to the rename keep `nit-*` artifact names on GitHub; the

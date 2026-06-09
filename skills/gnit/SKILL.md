@@ -121,3 +121,8 @@ Run `gnit status` and `gnit doctor` first. `status` shows per-member state, drif
 from the current Pin, and nested repos that are not yet adopted. `doctor` reports
 trailer, pin, exclude, and remote-drift problems. Fix the named member with
 ordinary Git, then re-run the Gnit command.
+
+If the workspace has a `.nit/` directory instead of `.gnit/` (or `doctor`
+reports legacy nit metadata or a legacy guidance block), it predates the gnit
+rename: run `gnit migrate` once. It moves `.nit/` to `.gnit/`, refreshes the
+agent guidance block, and commits the result; re-running is a no-op.

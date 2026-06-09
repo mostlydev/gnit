@@ -3081,3 +3081,45 @@ fn assert_gnit_guidance(text: &str) {
 fn gnit_guidance_count(text: &str) -> usize {
     text.matches("<!-- gnit:workspace:start -->").count()
 }
+
+#[test]
+fn migrate_converts_legacy_nit_workspace() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+
+    // Forge a pre-rename workspace: .nit/ metadata and the old guidance block.
+    git(ws, ["mv", ".gnit", ".nit"]);
+    let legacy_agents = "# Workspace\n\n<!-- nit:workspace:start -->\n> **Nit workspace** — drive cross-repo work with the `nit` CLI.\n<!-- nit:workspace:end -->\n";
+    std::fs::write(ws.join("AGENTS.md"), legacy_agents).unwrap();
+    git(ws, ["add", "AGENTS.md"]);
+    git(ws, ["commit", "-m", "Forge legacy nit workspace"]);
+
+    gnit(ws, ["doctor"])
+        .success()
+        .stdout(predicate::str::contains("legacy nit metadata"))
+        .stdout(predicate::str::contains("gnit migrate"));
+
+    gnit(ws, ["migrate"])
+        .success()
+        .stdout(predicate::str::contains(".nit -> .gnit"))
+        .stdout(predicate::str::contains(
+            "agent guidance: refreshed (AGENTS.md)",
+        ));
+
+    assert!(ws.join(".gnit/roster.yaml").exists());
+    assert!(!ws.join(".nit").exists());
+    let agents = std::fs::read_to_string(ws.join("AGENTS.md")).unwrap();
+    assert!(!agents.contains("<!-- nit:workspace:start -->"), "{agents}");
+    assert_gnit_guidance(&agents);
+
+    // The migration lands as one committed metadata change; the tree is clean.
+    let status = git_out(ws, ["status", "--porcelain"]);
+    assert_eq!(status.trim(), "", "{status}");
+    let subject = git_out(ws, ["log", "-1", "--pretty=%s"]);
+    assert_eq!(subject.trim(), "Migrate workspace metadata to gnit");
+
+    // Re-running is a no-op.
+    gnit(ws, ["migrate"])
+        .success()
+        .stdout(predicate::str::contains("nothing to migrate"));
+}

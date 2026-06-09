@@ -6,6 +6,7 @@ mod git;
 mod ids;
 mod log;
 mod metadata;
+mod migrate;
 mod pin;
 mod pr;
 mod push;
@@ -53,6 +54,7 @@ fn main() -> Result<()> {
         Commands::Ignore { paths } => workspace::ignore(paths),
         Commands::ImportSubmodule { path, id } => workspace::import_submodule(path, id),
         Commands::Doctor => workspace::doctor(),
+        Commands::Migrate => migrate::run(),
         Commands::Status => status::status(),
         Commands::Log => log::workspace_log(),
         Commands::Pin {

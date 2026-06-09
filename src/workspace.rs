@@ -140,14 +140,33 @@ pub fn doctor() -> Result<()> {
                 "added"
             };
             println!("  agent guidance: {guidance_status}");
+            report_legacy_guidance(&root);
             report_member_health(&root, &roster)?;
             report_pin_health(&root)?;
         }
-        None => println!("  workspace: not found"),
+        None => match crate::migrate::find_legacy_workspace(env::current_dir()?.as_path()) {
+            Some(root) => println!(
+                "  workspace: legacy nit metadata at {}; run `gnit migrate`",
+                root.display()
+            ),
+            None => println!("  workspace: not found"),
+        },
     }
 
     println!("  upkeep: automatic non-destructive upkeep enabled");
     Ok(())
+}
+
+/// A migrated workspace can still carry the pre-rename guidance block, which
+/// tells agents to drive the workspace with the old `nit` CLI.
+fn report_legacy_guidance(root: &Path) {
+    for name in ["AGENTS.md", "CLAUDE.md"] {
+        if let Ok(text) = fs::read_to_string(root.join(name)) {
+            if text.contains(crate::migrate::LEGACY_GUIDANCE_START) {
+                println!("  agent guidance: legacy nit block in {name}; run `gnit migrate`");
+            }
+        }
+    }
 }
 
 fn report_gh_health() {

@@ -103,6 +103,8 @@ pub enum Commands {
     },
     /// Diagnose the Gnit installation and current workspace.
     Doctor,
+    /// Migrate a pre-rename nit workspace (.nit/) to gnit (.gnit/).
+    Migrate,
     /// Show the current Gnit workspace state.
     Status,
     /// Show the unified workspace timeline of Changes and Pins.

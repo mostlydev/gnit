@@ -53,6 +53,7 @@ gnit adopt <path>... [--id <id>] [--no-commit]
 gnit import-submodule <path> [--id <id>]
 gnit ignore <path>...
 gnit doctor
+gnit migrate
 
 gnit status
 
@@ -192,3 +193,11 @@ and `agent guidance: added` when it inserts a missing one, mirroring the local
 exclude repair. The wording carries no command or version detail, so it survives
 releases without churn. Gnit writes these docs only on the explicit `gnit init` and
 `gnit doctor` invocations — never during silent upkeep.
+
+`gnit migrate` converts a workspace created before the gnit rename: it moves
+`.nit/` to `.gnit/` (via `git mv` when tracked), replaces the legacy
+`<!-- nit:workspace -->` guidance block with the current one, and commits the
+result as a single metadata commit. `gnit doctor` points at it when it sees
+legacy `.nit/` metadata or a leftover legacy guidance block. Re-running
+`gnit migrate` is a no-op. Commits keep their old `Nit-Change-Id` trailers and
+are not regrouped; new commits use `Gnit-Change-Id`.
