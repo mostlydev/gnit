@@ -13,8 +13,10 @@ curl -fsSL https://raw.githubusercontent.com/mostlydev/gnit/master/install.sh | 
 
 This downloads the latest release for your platform, verifies its SHA-256
 checksum, and installs `gnit` to `~/.local/bin` (override with `GNIT_INSTALL_DIR`).
-It needs `git` and `curl`. Verify the install with `gnit doctor`, and update later
-with `gnit update`.
+It also cleans up a pre-rename `nit` install when it can verify it is this
+tool's; unrelated tools named `nit` are never touched. It needs `git` and
+`curl`. Verify the install with `gnit doctor`, and update later with
+`gnit update`.
 
 ## Create A Workspace
 
