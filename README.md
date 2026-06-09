@@ -138,7 +138,9 @@ tests/              CLI integration tests.
 skills/
   nit/              Bundled agent skill, embedded into the binary.
   nit-release/      Maintainer release runbook skill (dev-only; not shipped).
-.claude/skills/     Project skills for Claude Code (e.g. nit-release).
+.agents/skills/     Cross-harness project skill links (Codex, OpenCode, ...).
+.claude/skills/     Claude Code project skill links.
+.grok/skills/       Grok project skill links — all symlink into skills/.
 install.sh          Release installer (used by `nit update`).
 docs/
   decisions/        Locked product and design decisions.
