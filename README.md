@@ -34,6 +34,21 @@ release builds may print a one-line cached hint when a newer release is
 available, but dev, CI, and noninteractive runs stay quiet. Nit never
 auto-updates; it only updates when you ask.
 
+## Agent Skills
+
+Install the bundled Nit skill into agent harnesses so agents use the `nit`
+workflow instead of guessing at raw Git across member repos:
+
+```sh
+nit skills install --all
+nit skills install claude codex opencode grok-build --copy
+nit skills list
+```
+
+The default install mode is `--link`, which points each harness at Nit's managed
+skill source under the Nit data directory. Use `--copy` for standalone snapshots.
+Supported harnesses are Claude Code, Codex, OpenCode, and Grok Build.
+
 ## Quickstart
 
 ```sh
@@ -55,6 +70,7 @@ nit status               # root/members, staged/modified/untracked, pin drift, d
 nit log                  # unified timeline of changes and pins
 nit change show <id>     # the commits that make up a change
 nit review <id-or-pin>   # combined review artifact
+nit skills install --all # teach installed agents the Nit workflow
 ```
 
 `nit push` reports every target and is safe to retry. If a member fails, Nit
@@ -82,6 +98,7 @@ push to `master` that touches `site/**` or the workflow. The build sets
 ```text
 src/                Rust CLI implementation.
 tests/              CLI integration tests.
+skills/             Bundled agent skills embedded into the binary.
 install.sh          Release installer (used by `nit update`).
 docs/
   decisions/        Locked product and design decisions.

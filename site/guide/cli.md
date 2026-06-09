@@ -27,6 +27,9 @@ nit change log [<id>]
 nit change diff <id>
 nit update --dry-run
 nit update --check
+nit skills install [<harness>...] [--all] [--copy|--link] [--print] [--force]
+nit skills uninstall [<harness>...] [--all] [--print]
+nit skills list
 ```
 
 The implemented CLI can create a workspace, adopt existing repos, preserve local
@@ -35,7 +38,8 @@ workspace paths, commit staged root/member changes under one `Nit-Change-Id`,
 land a change with a Pin, inspect trailer-based changes, record committed member
 HEADs as a Pin, materialize Pins with safe checkout defaults, push members
 before workspace metadata, render combined review output, repair local excludes
-with `doctor`, and follow the explicit update path.
+with `doctor`, follow the explicit update path, and install its bundled agent
+skill into supported harnesses.
 
 The v0 human workflow is intentionally small:
 
@@ -98,3 +102,11 @@ once per day. Disable upkeep with `--no-upkeep` or `NIT_NO_UPKEEP=1`.
 `nit update` follows the release installer path and is the explicit update
 command. `nit update --check` refreshes release metadata without replacing the
 binary. Nit does not auto-update.
+
+`nit skills install` installs the bundled Nit skill into Claude Code, Codex,
+OpenCode, and Grok Build. By default it links each harness to a Nit-managed skill
+source under the Nit data directory; `--copy` writes standalone snapshots.
+`--all` targets detected harness config directories, while explicit harness
+names such as `claude`, `codex`, `opencode`, or `grok-build` create their
+missing harness directories as needed. Nit never clobbers a non-Nit-owned
+`skills/nit` target unless `--force` is passed.

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 
 #[derive(Debug, Parser)]
 #[command(name = "nit")]
@@ -146,6 +146,11 @@ pub enum Commands {
         #[arg(long)]
         force: bool,
     },
+    /// Install the bundled Nit skill into agent harnesses.
+    Skills {
+        #[command(subcommand)]
+        command: SkillsCommands,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -158,4 +163,47 @@ pub enum ChangeCommands {
     Log { id: Option<String> },
     /// Show per-repo diffs for a Change.
     Diff { id: String },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SkillsCommands {
+    /// Install the bundled Nit skill.
+    Install(SkillsInstallArgs),
+    /// Remove the bundled Nit skill from harness skill directories.
+    Uninstall(SkillsUninstallArgs),
+    /// Show installed Nit skill state.
+    List,
+}
+
+#[derive(Debug, Args)]
+pub struct SkillsInstallArgs {
+    /// Harnesses to install into: claude, claude-code, codex, opencode, grok, grok-build.
+    pub harnesses: Vec<String>,
+    /// Install into every detected supported harness.
+    #[arg(long)]
+    pub all: bool,
+    /// Copy the skill instead of linking it.
+    #[arg(long, conflicts_with = "link")]
+    pub copy: bool,
+    /// Link the skill to Nit's managed source. This is the default.
+    #[arg(long)]
+    pub link: bool,
+    /// Print planned actions without changing files.
+    #[arg(long)]
+    pub print: bool,
+    /// Replace an existing non-Nit-owned skill target.
+    #[arg(long)]
+    pub force: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct SkillsUninstallArgs {
+    /// Harnesses to uninstall from: claude, claude-code, codex, opencode, grok, grok-build.
+    pub harnesses: Vec<String>,
+    /// Uninstall from every detected supported harness.
+    #[arg(long)]
+    pub all: bool,
+    /// Print planned actions without changing files.
+    #[arg(long)]
+    pub print: bool,
 }

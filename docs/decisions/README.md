@@ -12,3 +12,4 @@ Locked product and architecture decisions for Nit.
 - [0008-cached-update-notice.md](0008-cached-update-notice.md)
 - [0009-branch-aware-checkout.md](0009-branch-aware-checkout.md)
 - [0010-strict-push-resume.md](0010-strict-push-resume.md)
+- [0011-skill-distribution.md](0011-skill-distribution.md)

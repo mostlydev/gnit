@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 struct Fixture {
@@ -187,6 +188,231 @@ fn update_dry_run_shows_installer() {
         .success()
         .stdout(predicate::str::contains("mostlydev/nit"))
         .stdout(predicate::str::contains("install.sh"));
+}
+
+#[cfg(unix)]
+#[test]
+fn skills_install_link_writes_symlink_to_managed_source() {
+    let env = skill_env();
+    fs::create_dir_all(env.home.join(".codex")).unwrap();
+
+    env.command(["skills", "install", "codex"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[codex] added: linked"));
+
+    let managed = env.managed_skill();
+    let target = env.codex_skill();
+    assert!(managed.join("SKILL.md").exists());
+    assert!(fs::read_to_string(managed.join("SKILL.md"))
+        .unwrap()
+        .contains("# Driving Nit"));
+    assert!(fs::symlink_metadata(&target)
+        .unwrap()
+        .file_type()
+        .is_symlink());
+    assert_eq!(fs::read_link(&target).unwrap(), managed);
+
+    env.command(["skills", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("codex"))
+        .stdout(predicate::str::contains("linked"));
+}
+
+#[test]
+fn skills_install_copy_writes_real_skill_and_uninstall_keeps_managed_source() {
+    let env = skill_env();
+    fs::create_dir_all(env.home.join(".claude")).unwrap();
+
+    env.command(["skills", "install", "claude", "--copy"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[claude-code] added: copied"));
+
+    let managed = env.managed_skill();
+    let target = env.claude_skill();
+    assert!(managed.join("SKILL.md").exists());
+    assert!(target.join("SKILL.md").exists());
+    assert!(target.join(".nit-skill-managed").exists());
+    assert!(!fs::symlink_metadata(&target)
+        .unwrap()
+        .file_type()
+        .is_symlink());
+
+    env.command(["skills", "uninstall", "claude-code"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[claude-code] removed"));
+
+    assert!(!target.exists());
+    assert!(managed.join("SKILL.md").exists());
+}
+
+#[test]
+fn skills_install_print_is_noop() {
+    let env = skill_env();
+
+    env.command(["skills", "install", "codex", "--print"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("refresh managed source"))
+        .stdout(predicate::str::contains("create harness directory"))
+        .stdout(predicate::str::contains("[codex] link"));
+
+    assert!(!env.managed_skill().exists());
+    assert!(!env.codex_skill().exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn skills_install_all_targets_only_detected_harnesses() {
+    let env = skill_env();
+    fs::create_dir_all(env.home.join(".codex")).unwrap();
+    fs::create_dir_all(&env.grok_home).unwrap();
+
+    env.command(["skills", "install", "--all"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[codex] added: linked"))
+        .stdout(predicate::str::contains("[grok] added: linked"))
+        .stdout(predicate::str::contains("[claude-code] skipped"))
+        .stdout(predicate::str::contains("[opencode] skipped"));
+
+    assert!(fs::symlink_metadata(env.codex_skill())
+        .unwrap()
+        .file_type()
+        .is_symlink());
+    assert!(fs::symlink_metadata(env.grok_skill())
+        .unwrap()
+        .file_type()
+        .is_symlink());
+    assert!(!env.claude_skill().exists());
+    assert!(!env.opencode_skill().exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn skills_install_explicit_missing_root_creates_and_notes_it() {
+    let env = skill_env();
+
+    env.command(["skills", "install", "opencode"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[opencode] added: linked"))
+        .stdout(predicate::str::contains("created harness directory"));
+
+    assert!(env.home.join(".opencode").exists());
+    assert!(fs::symlink_metadata(env.opencode_skill())
+        .unwrap()
+        .file_type()
+        .is_symlink());
+}
+
+#[test]
+fn skills_install_copy_refreshes_stale_managed_copy() {
+    let env = skill_env();
+    fs::create_dir_all(env.home.join(".codex")).unwrap();
+
+    env.command(["skills", "install", "codex", "--copy"])
+        .assert()
+        .success();
+    fs::write(env.codex_skill().join("SKILL.md"), "stale\n").unwrap();
+
+    env.command(["skills", "install", "codex", "--copy"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[codex] updated: copied"));
+
+    assert!(fs::read_to_string(env.codex_skill().join("SKILL.md"))
+        .unwrap()
+        .contains("# Driving Nit"));
+}
+
+#[cfg(unix)]
+#[test]
+fn skills_install_link_refreshes_managed_source_on_reinstall() {
+    let env = skill_env();
+    fs::create_dir_all(env.home.join(".codex")).unwrap();
+
+    env.command(["skills", "install", "codex"])
+        .assert()
+        .success();
+    fs::write(env.managed_skill().join("SKILL.md"), "stale\n").unwrap();
+
+    env.command(["skills", "install", "codex"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[codex] already-present: linked"));
+
+    assert!(fs::read_to_string(env.managed_skill().join("SKILL.md"))
+        .unwrap()
+        .contains("# Driving Nit"));
+}
+
+#[test]
+fn skills_install_propagates_managed_source_read_errors() {
+    let env = skill_env();
+    fs::create_dir_all(env.home.join(".codex")).unwrap();
+    fs::create_dir_all(env.managed_skill().join("SKILL.md")).unwrap();
+
+    env.command(["skills", "install", "codex", "--copy"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("read"))
+        .stderr(predicate::str::contains("SKILL.md"));
+
+    assert!(env.managed_skill().join("SKILL.md").is_dir());
+    assert!(!env.codex_skill().exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn skills_install_blocks_foreign_target_without_force() {
+    let env = skill_env();
+    let target = env.codex_skill();
+    fs::create_dir_all(&target).unwrap();
+    fs::write(target.join("SKILL.md"), "custom\n").unwrap();
+
+    let assert = env
+        .command(["skills", "install", "codex"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "skills install completed with failures",
+        ));
+    assert!(String::from_utf8_lossy(&assert.get_output().stdout).contains("[codex] failed"));
+    assert_eq!(
+        fs::read_to_string(target.join("SKILL.md")).unwrap(),
+        "custom\n"
+    );
+
+    env.command(["skills", "install", "codex", "--force"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[codex] updated: linked"));
+    assert!(fs::symlink_metadata(env.codex_skill())
+        .unwrap()
+        .file_type()
+        .is_symlink());
+}
+
+#[cfg(unix)]
+#[test]
+fn skills_install_aliases_dedupe_harnesses() {
+    let env = skill_env();
+    fs::create_dir_all(env.home.join(".claude")).unwrap();
+
+    let assert = env
+        .command(["skills", "install", "claude", "claude-code"])
+        .assert()
+        .success();
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
+    assert_eq!(stdout.matches("[claude-code]").count(), 1, "{stdout}");
+    assert!(fs::symlink_metadata(env.claude_skill())
+        .unwrap()
+        .file_type()
+        .is_symlink());
 }
 
 #[test]
@@ -1237,6 +1463,64 @@ fn remove_pins_with_label(root: &Path, label: &str) {
         if text.lines().any(|line| line == format!("label: {label}")) {
             std::fs::remove_file(path).unwrap();
         }
+    }
+}
+
+struct SkillEnv {
+    _temp: tempfile::TempDir,
+    home: PathBuf,
+    data: PathBuf,
+    grok_home: PathBuf,
+}
+
+impl SkillEnv {
+    fn command<const N: usize>(&self, args: [&str; N]) -> Command {
+        let mut command = Command::cargo_bin("nit").unwrap();
+        command
+            .args(args)
+            .current_dir(&self.home)
+            .env("HOME", &self.home)
+            .env("USERPROFILE", &self.home)
+            .env("NIT_DATA_DIR", &self.data)
+            .env("XDG_DATA_HOME", self.home.join(".xdg-data"))
+            .env("GROK_HOME", &self.grok_home)
+            .env("NIT_NO_UPKEEP", "true");
+        command
+    }
+
+    fn managed_skill(&self) -> PathBuf {
+        self.data.join("skills/nit")
+    }
+
+    fn claude_skill(&self) -> PathBuf {
+        self.home.join(".claude/skills/nit")
+    }
+
+    fn codex_skill(&self) -> PathBuf {
+        self.home.join(".codex/skills/nit")
+    }
+
+    fn opencode_skill(&self) -> PathBuf {
+        self.home.join(".opencode/skills/nit")
+    }
+
+    fn grok_skill(&self) -> PathBuf {
+        self.grok_home.join("skills/nit")
+    }
+}
+
+fn skill_env() -> SkillEnv {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let home = root.join("home");
+    let data = root.join("data");
+    let grok_home = root.join("grok-home");
+    fs::create_dir_all(&home).unwrap();
+    SkillEnv {
+        _temp: temp,
+        home,
+        data,
+        grok_home,
     }
 }
 

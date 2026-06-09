@@ -9,6 +9,7 @@ mod metadata;
 mod pin;
 mod push;
 mod review;
+mod skills;
 mod status;
 mod update;
 mod upkeep;
@@ -16,7 +17,7 @@ mod workspace;
 
 use anyhow::Result;
 use clap::Parser;
-use cli::{ChangeCommands, Cli, Commands};
+use cli::{ChangeCommands, Cli, Commands, SkillsCommands};
 
 fn main() -> Result<()> {
     // Reset SIGPIPE to default so piping into `head`/`less` (closed early) exits
@@ -84,5 +85,10 @@ fn main() -> Result<()> {
                 update::run(dry_run, force)
             }
         }
+        Commands::Skills { command } => match command {
+            SkillsCommands::Install(args) => skills::install(args),
+            SkillsCommands::Uninstall(args) => skills::uninstall(args),
+            SkillsCommands::List => skills::list(),
+        },
     }
 }
