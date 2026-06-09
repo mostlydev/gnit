@@ -1508,6 +1508,106 @@ fn push_holds_root_for_pin_reachable_only_from_local_branch() {
     );
 }
 
+#[test]
+fn ci_check_rejects_member_commit_without_gnit_trailer() {
+    let temp = tempdir_without_gnit_ancestor();
+    let repo = temp.path();
+    git_init(repo);
+    fs::write(repo.join("README.md"), "base\n").unwrap();
+    git(repo, ["add", "README.md"]);
+    git(repo, ["commit", "-m", "Initial"]);
+
+    fs::write(repo.join("feature.txt"), "missing trailer\n").unwrap();
+    git(repo, ["add", "feature.txt"]);
+    git(repo, ["commit", "-m", "Raw feature"]);
+
+    gnit(repo, ["ci-check", "--base", "HEAD~1", "--head", "HEAD"])
+        .failure()
+        .stdout(predicate::str::contains("commit trailers: failed"))
+        .stdout(predicate::str::contains("Raw feature"))
+        .stdout(predicate::str::contains("pin reachability: skipped"))
+        .stderr(predicate::str::contains("ci-check failed"));
+}
+
+#[test]
+fn ci_check_accepts_member_commit_with_valid_gnit_trailer() {
+    let temp = tempdir_without_gnit_ancestor();
+    let repo = temp.path();
+    git_init(repo);
+    fs::write(repo.join("README.md"), "base\n").unwrap();
+    git(repo, ["add", "README.md"]);
+    git(repo, ["commit", "-m", "Initial"]);
+
+    fs::write(repo.join("feature.txt"), "valid trailer\n").unwrap();
+    git(repo, ["add", "feature.txt"]);
+    git(
+        repo,
+        [
+            "commit",
+            "-m",
+            "Feature with trailer",
+            "-m",
+            "Gnit-Change-Id: GCH-1760000000000-72e5",
+        ],
+    );
+
+    gnit(repo, ["ci-check", "--base", "HEAD~1", "--head", "HEAD"])
+        .success()
+        .stdout(predicate::str::contains("commit trailers: ok (1 checked)"))
+        .stdout(predicate::str::contains("pin reachability: skipped"));
+}
+
+#[test]
+fn ci_check_allows_root_metadata_pin_when_member_commit_is_on_origin() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+
+    gnit(workspace, ["pin", "baseline"]).success();
+
+    gnit(
+        workspace,
+        ["ci-check", "--base", "HEAD~1", "--head", "HEAD"],
+    )
+    .success()
+    .stdout(predicate::str::contains("commit trailers: ok (0 checked)"))
+    .stdout(predicate::str::contains(
+        "pin reachability: ok (1 member pins checked)",
+    ));
+}
+
+#[test]
+fn ci_check_rejects_root_pin_for_member_commit_not_on_origin() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+    let sdk = workspace.join("vendor/sdk");
+
+    git(&sdk, ["checkout", "-b", "local/ci-pin"]);
+    fs::write(
+        sdk.join("lib.rs"),
+        "pub fn sdk() -> &'static str { \"ci local\" }\n",
+    )
+    .unwrap();
+    gnit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    gnit(
+        workspace,
+        ["land", "ci-local-only", "-m", "Create local-only CI pin"],
+    )
+    .success();
+
+    gnit(
+        workspace,
+        ["ci-check", "--base", "HEAD~1", "--head", "HEAD"],
+    )
+    .failure()
+    .stdout(predicate::str::contains("commit trailers: ok (0 checked)"))
+    .stdout(predicate::str::contains("pin reachability: failed"))
+    .stdout(predicate::str::contains(
+        "pin ci-local-only references member sdk",
+    ))
+    .stdout(predicate::str::contains("not reachable from origin"))
+    .stderr(predicate::str::contains("ci-check failed"));
+}
+
 #[cfg(unix)]
 #[test]
 fn pr_open_creates_linked_draft_prs_and_rerun_does_not_duplicate() {

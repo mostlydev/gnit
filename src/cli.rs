@@ -106,6 +106,15 @@ pub enum Commands {
     },
     /// Diagnose the Gnit installation and current workspace.
     Doctor,
+    /// Validate Gnit invariants for CI.
+    CiCheck {
+        /// Base ref for the PR branch range.
+        #[arg(long, default_value = "origin/master")]
+        base: String,
+        /// Head ref for the PR branch range.
+        #[arg(long, default_value = "HEAD")]
+        head: String,
+    },
     /// Migrate a pre-rename nit workspace (.nit/) to gnit (.gnit/).
     Migrate,
     /// Show the current Gnit workspace state.

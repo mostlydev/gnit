@@ -1,6 +1,7 @@
 mod cache;
 mod change;
 mod checkout;
+mod ci;
 mod cli;
 mod clone;
 mod git;
@@ -62,6 +63,7 @@ fn main() -> Result<()> {
         Commands::Ignore { paths } => workspace::ignore(paths),
         Commands::ImportSubmodule { path, id } => workspace::import_submodule(path, id),
         Commands::Doctor => workspace::doctor(),
+        Commands::CiCheck { base, head } => ci::check(base, head),
         Commands::Migrate => migrate::run(),
         Commands::Status => status::status(),
         Commands::Log => log::workspace_log(),
@@ -133,6 +135,7 @@ fn command_requires_workspace_lock(command: &Commands) -> bool {
         | Commands::Pin { .. }
         | Commands::Push { .. } => true,
         Commands::Clone { .. }
+        | Commands::CiCheck { .. }
         | Commands::Init { .. }
         | Commands::Status
         | Commands::Log

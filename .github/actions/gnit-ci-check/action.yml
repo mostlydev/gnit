@@ -1,0 +1,36 @@
+name: Gnit CI Check
+description: Validate Gnit Change trailers and published pin reachability.
+
+inputs:
+  gnit-command:
+    description: Command used to run the gnit binary.
+    required: false
+    default: gnit
+  base:
+    description: Base ref for the PR branch range. Defaults to origin/$GITHUB_BASE_REF or origin/master.
+    required: false
+    default: ""
+  head:
+    description: Head ref for the PR branch range.
+    required: false
+    default: HEAD
+  args:
+    description: Extra arguments passed to gnit ci-check.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
+        base="${{ inputs.base }}"
+        if [ -z "$base" ]; then
+          if [ -n "${GITHUB_BASE_REF:-}" ]; then
+            base="origin/${GITHUB_BASE_REF}"
+          else
+            base="origin/master"
+          fi
+        fi
+        "${{ inputs.gnit-command }}" ci-check --base "$base" --head "${{ inputs.head }}" ${{ inputs.args }}

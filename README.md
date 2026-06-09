@@ -118,6 +118,41 @@ PRs synchronized.
 `gnit pr open` only creates what is missing, so it is safe to re-run after a
 failure — already-open PRs are refreshed, never duplicated.
 
+## CI Enforcement
+
+Use `gnit ci-check` as the CI/server-side enforcement point for the
+reconstruct-not-enforce model:
+
+```sh
+gnit ci-check --base origin/main --head HEAD
+```
+
+For ordinary member repositories, the command requires every commit in
+`base..head` to carry a well-formed `Gnit-Change-Id` trailer. When run from a
+Gnit workspace root, metadata-only commits under `.gnit/` and managed agent
+guidance files are allowed without trailers, and every committed Pin at `head`
+is checked against each active member's `origin` refs after fetching that member
+origin.
+
+The repository also ships a thin composite Action wrapper:
+
+```yaml
+steps:
+  - uses: actions/checkout@v6
+    with:
+      fetch-depth: 0
+  - run: |
+      mkdir -p "$HOME/.local/bin"
+      echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      curl -fsSL https://raw.githubusercontent.com/mostlydev/gnit/master/install.sh | sh
+  - uses: mostlydev/gnit/.github/actions/gnit-ci-check@<ref>
+    with:
+      base: origin/${{ github.base_ref }}
+```
+
+Workspace-root CI jobs must check out or hydrate member repos before running the
+Action so pinned member commits can be verified against their remotes.
+
 Reconstruct the workspace on another machine:
 
 ```sh
