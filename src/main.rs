@@ -7,6 +7,7 @@ mod ids;
 mod log;
 mod metadata;
 mod pin;
+mod pr;
 mod push;
 mod review;
 mod skills;
@@ -17,7 +18,7 @@ mod workspace;
 
 use anyhow::Result;
 use clap::Parser;
-use cli::{ChangeCommands, Cli, Commands, SkillsCommands};
+use cli::{ChangeCommands, Cli, Commands, PrCommands, SkillsCommands};
 
 fn main() -> Result<()> {
     // Reset SIGPIPE to default so piping into `head`/`less` (closed early) exits
@@ -73,6 +74,10 @@ fn main() -> Result<()> {
             ChangeCommands::Diff { id } => change::diff(id),
         },
         Commands::Push { resume } => push::push(resume),
+        Commands::Pr { command, args } => match command {
+            Some(PrCommands::Open(open_args)) => pr::open(open_args),
+            None => pr::status(args),
+        },
         Commands::Review { target } => review::review(target),
         Commands::Update {
             check,

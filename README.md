@@ -65,8 +65,10 @@ nit push                 # publish members first, then workspace metadata
 # Or publish a reproducible snapshot (a Pin) in one step.
 nit land -m "Release the new field"   # commit + pin together
 nit push
+nit pr open            # create/adopt linked draft GitHub PRs
 
 nit status               # root/members, staged/modified/untracked, pin drift, discovered repos
+nit pr                   # linked PR status for the current Change
 nit log                  # unified timeline of changes and pins
 nit change show <id>     # the commits that make up a change
 nit review <id-or-pin>   # combined review artifact
@@ -76,6 +78,32 @@ nit skills install --all # teach installed agents the Nit workflow
 `nit push` reports every target and is safe to retry. If a member fails, Nit
 holds the workspace metadata back; after fixing the member, run `nit push` again
 or `nit push --resume` for the explicit retry spelling.
+
+`nit pr` is read-only status for the current workspace Change. `nit pr open`
+creates missing draft GitHub PRs, adopts existing same-branch PRs, and refreshes
+Nit-owned cross-links in each PR body. It derives the Change, branch, base, and
+title from Git state in the common case; use `--change`, `--pin`, `--base`, or
+`--title` only as escape hatches.
+
+One workspace Change becomes one ordinary PR per touched repo, visible at a glance:
+
+```text
+$ nit pr
+Workspace change NCH-1780970169140-000018d60000000000000000
+repo                         branch              base        pr        state     checks
+root (metadata)              feature/pr-flow     master      #1        open      pending
+sdk                          feature/pr-flow     master      #2        open      pass
+app                          feature/pr-flow     master      missing   -         -
+
+$ nit pr open
+  root                     already open
+  sdk                      already open
+  app                      created
+PRs synchronized.
+```
+
+`nit pr open` only creates what is missing, so it is safe to re-run after a
+failure — already-open PRs are refreshed, never duplicated.
 
 Reconstruct the workspace on another machine:
 

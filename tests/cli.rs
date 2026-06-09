@@ -1,6 +1,9 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
+use serde_json::json;
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 struct Fixture {
@@ -797,6 +800,365 @@ fn push_holds_root_when_pin_commit_was_rewritten_away() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn pr_open_creates_linked_draft_prs_and_rerun_does_not_duplicate() {
+    let fixture = workspace_with_three_member_remotes();
+    let workspace = fixture.root.as_path();
+    prepare_pr_base_refs(workspace, ["sdk", "app", "docs"]);
+
+    git(workspace, ["checkout", "-b", "feature/pr-flow"]);
+    git(
+        &workspace.join("sdk"),
+        ["checkout", "-b", "feature/pr-flow"],
+    );
+    git(
+        &workspace.join("app"),
+        ["checkout", "-b", "feature/pr-flow"],
+    );
+
+    fs::write(workspace.join("README.md"), "root pr flow\n").unwrap();
+    fs::write(workspace.join("sdk/sdk.txt"), "sdk pr flow\n").unwrap();
+    fs::write(workspace.join("app/app.txt"), "app pr flow\n").unwrap();
+    nit(
+        workspace,
+        ["add", "README.md", "sdk/sdk.txt", "app/app.txt"],
+    );
+    let land = nit(
+        workspace,
+        ["land", "review-pin", "-m", "Add linked PR flow"],
+    );
+    let change_id = parse_created_change(&land);
+    nit(workspace, ["push"]).success();
+
+    let gh = fake_gh();
+    gh.command(workspace, ["pr", "open"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Opening PRs for Change"))
+        .stdout(predicate::str::contains("created"));
+
+    let state = gh.state();
+    let prs = state["prs"].as_array().unwrap();
+    assert_eq!(prs.len(), 3, "{state}");
+    assert!(prs.iter().any(|pr| pr["repo"] == "acme/root"));
+    assert!(prs.iter().any(|pr| pr["repo"] == "acme/sdk"));
+    assert!(prs.iter().any(|pr| pr["repo"] == "acme/app"));
+    assert!(prs.iter().all(|pr| pr["draft"] == true));
+    for pr in prs {
+        let body = pr["body"].as_str().unwrap();
+        assert!(body.contains(&format!("Nit-Change-Id: {change_id}")));
+        assert!(body.contains("acme/root#"));
+        assert!(body.contains("acme/sdk#"));
+        assert!(body.contains("acme/app#"));
+    }
+
+    gh.command(workspace, ["pr", "open"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("already open"));
+    assert_eq!(gh.state()["prs"].as_array().unwrap().len(), 3);
+
+    gh.command(workspace, ["pr"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Workspace change"))
+        .stdout(predicate::str::contains("#1"))
+        .stdout(predicate::str::contains("open"));
+}
+
+#[cfg(unix)]
+#[test]
+fn pr_open_member_only_change_creates_only_member_pr() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+    prepare_pr_base_refs(workspace, ["vendor/sdk"]);
+
+    let sdk = workspace.join("vendor/sdk");
+    git(&sdk, ["checkout", "-b", "feature/sdk-api"]);
+    fs::write(
+        sdk.join("lib.rs"),
+        "pub fn sdk() -> &'static str { \"pr\" }\n",
+    )
+    .unwrap();
+    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    let commit = nit(workspace, ["commit", "-m", "Update SDK API"]);
+    let change_id = parse_created_change(&commit);
+    nit(workspace, ["push"]).success();
+
+    let gh = fake_gh();
+    gh.command(workspace, ["pr", "open"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(&change_id))
+        .stdout(predicate::str::contains("created"));
+
+    let state = gh.state();
+    let prs = state["prs"].as_array().unwrap();
+    assert_eq!(prs.len(), 1, "{state}");
+    assert_eq!(prs[0]["repo"], "acme/sdk");
+    assert_eq!(prs[0]["head"], "feature/sdk-api");
+}
+
+#[cfg(unix)]
+#[test]
+fn pr_open_adopts_manual_pr_and_preserves_body_text() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+    prepare_pr_base_refs(workspace, ["vendor/sdk"]);
+
+    let sdk = workspace.join("vendor/sdk");
+    git(&sdk, ["checkout", "-b", "feature/manual-pr"]);
+    fs::write(
+        sdk.join("lib.rs"),
+        "pub fn sdk() -> &'static str { \"manual\" }\n",
+    )
+    .unwrap();
+    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    let commit = nit(workspace, ["commit", "-m", "Update manual PR"]);
+    let change_id = parse_created_change(&commit);
+    nit(workspace, ["push"]).success();
+
+    let gh = fake_gh();
+    gh.write_state(json!({
+        "next": 2,
+        "prs": [{
+            "repo": "acme/sdk",
+            "number": 1,
+            "state": "OPEN",
+            "url": "https://github.com/acme/sdk/pull/1",
+            "title": "Manual PR",
+            "head": "feature/manual-pr",
+            "body": "Manual text stays.",
+            "checks": []
+        }]
+    }));
+
+    gh.command(workspace, ["pr", "open", "--change", &change_id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("adopted"));
+
+    let state = gh.state();
+    let prs = state["prs"].as_array().unwrap();
+    assert_eq!(prs.len(), 1, "{state}");
+    let body = prs[0]["body"].as_str().unwrap();
+    assert!(body.contains("Manual text stays."));
+    assert!(body.contains(&format!("Nit-Change-Id: {change_id}")));
+}
+
+#[cfg(unix)]
+#[test]
+fn pr_open_blocks_when_remote_branch_is_missing() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+    prepare_pr_base_refs(workspace, ["vendor/sdk"]);
+
+    let sdk = workspace.join("vendor/sdk");
+    git(&sdk, ["checkout", "-b", "feature/unpushed"]);
+    fs::write(
+        sdk.join("lib.rs"),
+        "pub fn sdk() -> &'static str { \"unpushed\" }\n",
+    )
+    .unwrap();
+    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    let commit = nit(workspace, ["commit", "-m", "Update unpushed SDK"]);
+    let change_id = parse_created_change(&commit);
+
+    fake_gh()
+        .command(workspace, ["pr", "open", "--change", &change_id])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "pr open blocked before creating PRs",
+        ))
+        .stderr(predicate::str::contains("nit push"));
+}
+
+#[cfg(unix)]
+#[test]
+fn pr_open_blocks_ambiguous_duplicate_markers() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+    prepare_pr_base_refs(workspace, ["vendor/sdk"]);
+
+    let sdk = workspace.join("vendor/sdk");
+    git(&sdk, ["checkout", "-b", "feature/duplicate-pr"]);
+    fs::write(
+        sdk.join("lib.rs"),
+        "pub fn sdk() -> &'static str { \"duplicate\" }\n",
+    )
+    .unwrap();
+    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    let commit = nit(workspace, ["commit", "-m", "Update duplicate PR"]);
+    let change_id = parse_created_change(&commit);
+    nit(workspace, ["push"]).success();
+
+    let marker =
+        format!("<!-- nit-pr-sync:start -->\nNit-Change-Id: {change_id}\n<!-- nit-pr-sync:end -->");
+    let gh = fake_gh();
+    gh.write_state(json!({
+        "next": 3,
+        "prs": [
+            {
+                "repo": "acme/sdk",
+                "number": 1,
+                "state": "OPEN",
+                "url": "https://github.com/acme/sdk/pull/1",
+                "title": "One",
+                "head": "feature/duplicate-pr",
+                "body": marker,
+                "checks": []
+            },
+            {
+                "repo": "acme/sdk",
+                "number": 2,
+                "state": "CLOSED",
+                "url": "https://github.com/acme/sdk/pull/2",
+                "title": "Two",
+                "head": "feature/duplicate-pr",
+                "body": marker,
+                "checks": []
+            }
+        ]
+    }));
+
+    gh.command(workspace, ["pr", "open", "--change", &change_id])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("multiple PRs"));
+}
+
+#[cfg(unix)]
+#[test]
+fn pr_status_degrades_when_gh_is_offline() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+    prepare_pr_base_refs(workspace, ["vendor/sdk"]);
+
+    let sdk = workspace.join("vendor/sdk");
+    git(&sdk, ["checkout", "-b", "feature/offline"]);
+    fs::write(
+        sdk.join("lib.rs"),
+        "pub fn sdk() -> &'static str { \"offline\" }\n",
+    )
+    .unwrap();
+    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    let commit = nit(workspace, ["commit", "-m", "Update offline SDK"]);
+    let change_id = parse_created_change(&commit);
+
+    let mut cmd = Command::cargo_bin("nit").unwrap();
+    cmd.current_dir(workspace)
+        .env("NIT_GH_BIN", workspace.join("missing-gh"))
+        .args(["pr", "--change", &change_id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Workspace change"))
+        .stdout(predicate::str::contains("unknown"))
+        .stdout(predicate::str::contains("offline"));
+}
+
+#[cfg(unix)]
+#[test]
+fn pr_open_resumes_after_partial_create_failure() {
+    let (fixture, change_id) = three_repo_pr_change();
+    let workspace = fixture.root.as_path();
+    let gh = fake_gh();
+
+    let mut first = gh.command(workspace, ["pr", "open", "--change", &change_id]);
+    first
+        .env("NIT_FAKE_GH_FAIL_CREATE_REPO", "acme/app")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("pr open incomplete"));
+    assert_eq!(gh.state()["prs"].as_array().unwrap().len(), 2);
+
+    gh.command(workspace, ["pr", "open", "--change", &change_id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("already open"))
+        .stdout(predicate::str::contains("created"));
+
+    let state = gh.state();
+    let prs = state["prs"].as_array().unwrap();
+    assert_eq!(prs.len(), 3, "{state}");
+    for pr in prs {
+        let body = pr["body"].as_str().unwrap();
+        assert!(body.contains("acme/root#"));
+        assert!(body.contains("acme/sdk#"));
+        assert!(body.contains("acme/app#"));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn pr_status_shows_mixed_states_and_checks() {
+    let (fixture, change_id) = three_repo_pr_change();
+    let workspace = fixture.root.as_path();
+    let marker =
+        format!("<!-- nit-pr-sync:start -->\nNit-Change-Id: {change_id}\n<!-- nit-pr-sync:end -->");
+    let gh = fake_gh();
+    gh.write_state(json!({
+        "next": 4,
+        "prs": [
+            {
+                "repo": "acme/root",
+                "number": 1,
+                "state": "OPEN",
+                "url": "https://github.com/acme/root/pull/1",
+                "title": "Root",
+                "head": "feature/pr-flow",
+                "body": marker,
+                "checks": [{"status": "IN_PROGRESS"}]
+            },
+            {
+                "repo": "acme/sdk",
+                "number": 2,
+                "state": "MERGED",
+                "url": "https://github.com/acme/sdk/pull/2",
+                "title": "SDK",
+                "head": "feature/pr-flow",
+                "body": marker,
+                "checks": [{"status": "COMPLETED", "conclusion": "SUCCESS"}]
+            },
+            {
+                "repo": "acme/app",
+                "number": 3,
+                "state": "CLOSED",
+                "url": "https://github.com/acme/app/pull/3",
+                "title": "App",
+                "head": "feature/pr-flow",
+                "body": marker,
+                "checks": [{"status": "COMPLETED", "conclusion": "FAILURE"}]
+            }
+        ]
+    }));
+
+    gh.command(workspace, ["pr", "--change", &change_id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("open"))
+        .stdout(predicate::str::contains("pending"))
+        .stdout(predicate::str::contains("merged"))
+        .stdout(predicate::str::contains("pass"))
+        .stdout(predicate::str::contains("closed"))
+        .stdout(predicate::str::contains("fail"));
+}
+
+#[cfg(unix)]
+#[test]
+fn pr_pin_alias_resolves_single_provenance_change() {
+    let (fixture, change_id) = three_repo_pr_change();
+    let workspace = fixture.root.as_path();
+
+    fake_gh()
+        .command(workspace, ["pr", "--pin", "review-pin"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Pin: review-pin"))
+        .stdout(predicate::str::contains(change_id));
+}
+
 #[test]
 fn push_ignores_retained_pins_for_retired_missing_members() {
     let fixture = workspace_with_remotes();
@@ -1522,6 +1884,220 @@ fn skill_env() -> SkillEnv {
         data,
         grok_home,
     }
+}
+
+#[cfg(unix)]
+struct FakeGh {
+    _temp: tempfile::TempDir,
+    bin: PathBuf,
+    state: PathBuf,
+}
+
+#[cfg(unix)]
+impl FakeGh {
+    fn command<const N: usize>(&self, dir: &Path, args: [&str; N]) -> Command {
+        let mut command = Command::cargo_bin("nit").unwrap();
+        command
+            .args(args)
+            .current_dir(dir)
+            .env("NIT_GH_BIN", &self.bin)
+            .env("NIT_FAKE_GH_STATE", &self.state)
+            .env("NIT_NO_UPKEEP", "true");
+        command
+    }
+
+    fn state(&self) -> serde_json::Value {
+        serde_json::from_str(&fs::read_to_string(&self.state).unwrap()).unwrap()
+    }
+
+    fn write_state(&self, value: serde_json::Value) {
+        fs::write(&self.state, serde_json::to_string_pretty(&value).unwrap()).unwrap();
+    }
+}
+
+#[cfg(unix)]
+fn fake_gh() -> FakeGh {
+    let temp = tempfile::tempdir().unwrap();
+    let bin = temp.path().join("gh");
+    let state = temp.path().join("state.json");
+    fs::write(&state, r#"{"next":1,"prs":[]}"#).unwrap();
+    fs::write(
+        &bin,
+        r#"#!/usr/bin/env python3
+import json
+import os
+import sys
+
+state_path = os.environ.get("NIT_FAKE_GH_STATE")
+
+def load():
+    if not state_path or not os.path.exists(state_path):
+        return {"next": 1, "prs": []}
+    with open(state_path) as f:
+        return json.load(f)
+
+def save(data):
+    with open(state_path, "w") as f:
+        json.dump(data, f)
+
+def arg_after(args, name):
+    if name in args:
+        i = args.index(name)
+        if i + 1 < len(args):
+            return args[i + 1]
+    return None
+
+def repo_for_cwd():
+    name = os.path.basename(os.getcwd())
+    if name == "workspace":
+        name = "root"
+    if name == "sdk":
+        name = "sdk"
+    return f"acme/{name}"
+
+args = sys.argv[1:]
+if args == ["--version"]:
+    print("gh version 2.93.0 (fake)")
+    sys.exit(0)
+if args[:2] == ["auth", "status"]:
+    print("Logged in to github.com as nit-test")
+    sys.exit(0)
+if args[:2] == ["repo", "view"]:
+    print(json.dumps({"nameWithOwner": repo_for_cwd()}))
+    sys.exit(0)
+if args[:2] == ["pr", "list"]:
+    data = load()
+    repo = arg_after(args, "-R")
+    head = arg_after(args, "--head")
+    search = arg_after(args, "--search")
+    needle = None
+    if search:
+        needle = search.strip('"')
+    out = []
+    for pr in data["prs"]:
+        if repo and pr.get("repo") != repo:
+            continue
+        if head and pr.get("head") != head:
+            continue
+        if needle and needle not in pr.get("body", ""):
+            continue
+        out.append({
+            "number": pr["number"],
+            "state": pr.get("state", "OPEN"),
+            "url": pr.get("url", ""),
+            "title": pr.get("title", ""),
+            "headRefName": pr.get("head", ""),
+            "body": pr.get("body", ""),
+            "statusCheckRollup": pr.get("checks", []),
+        })
+    print(json.dumps(out))
+    sys.exit(0)
+if args[:2] == ["pr", "create"]:
+    data = load()
+    repo = arg_after(args, "-R")
+    if os.environ.get("NIT_FAKE_GH_FAIL_CREATE_REPO") == repo:
+        print(f"forced create failure for {repo}", file=sys.stderr)
+        sys.exit(1)
+    number = int(data.get("next", 1))
+    data["next"] = number + 1
+    head = arg_after(args, "--head")
+    title = arg_after(args, "--title") or ""
+    body = arg_after(args, "--body") or ""
+    pr = {
+        "repo": repo,
+        "number": number,
+        "state": "OPEN",
+        "url": f"https://github.com/{repo}/pull/{number}",
+        "title": title,
+        "head": head,
+        "body": body,
+        "draft": "--draft" in args,
+        "checks": [],
+    }
+    data["prs"].append(pr)
+    save(data)
+    print(pr["url"])
+    sys.exit(0)
+if args[:2] == ["pr", "edit"]:
+    data = load()
+    number = int(args[2])
+    repo = arg_after(args, "-R")
+    body = arg_after(args, "--body")
+    for pr in data["prs"]:
+        if pr.get("repo") == repo and int(pr.get("number")) == number:
+            pr["body"] = body
+            save(data)
+            print(pr.get("url", ""))
+            sys.exit(0)
+    print(f"PR {repo}#{number} not found", file=sys.stderr)
+    sys.exit(1)
+print("unsupported fake gh args: " + " ".join(args), file=sys.stderr)
+sys.exit(1)
+"#,
+    )
+    .unwrap();
+    let mut perms = fs::metadata(&bin).unwrap().permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&bin, perms).unwrap();
+    FakeGh {
+        _temp: temp,
+        bin,
+        state,
+    }
+}
+
+#[cfg(unix)]
+fn prepare_pr_base_refs<const N: usize>(workspace: &Path, members: [&str; N]) {
+    prepare_one_pr_base_ref(workspace);
+    for member in members {
+        prepare_one_pr_base_ref(&workspace.join(member));
+    }
+}
+
+#[cfg(unix)]
+fn prepare_one_pr_base_ref(repo: &Path) {
+    git(repo, ["fetch", "origin", "master"]);
+    git(
+        repo,
+        [
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/master",
+        ],
+    );
+}
+
+#[cfg(unix)]
+fn three_repo_pr_change() -> (ThreeMemberRemoteFixture, String) {
+    let fixture = workspace_with_three_member_remotes();
+    let workspace = fixture.root.as_path();
+    prepare_pr_base_refs(workspace, ["sdk", "app", "docs"]);
+
+    git(workspace, ["checkout", "-b", "feature/pr-flow"]);
+    git(
+        &workspace.join("sdk"),
+        ["checkout", "-b", "feature/pr-flow"],
+    );
+    git(
+        &workspace.join("app"),
+        ["checkout", "-b", "feature/pr-flow"],
+    );
+
+    fs::write(workspace.join("README.md"), "root pr flow\n").unwrap();
+    fs::write(workspace.join("sdk/sdk.txt"), "sdk pr flow\n").unwrap();
+    fs::write(workspace.join("app/app.txt"), "app pr flow\n").unwrap();
+    nit(
+        workspace,
+        ["add", "README.md", "sdk/sdk.txt", "app/app.txt"],
+    );
+    let land = nit(
+        workspace,
+        ["land", "review-pin", "-m", "Add linked PR flow"],
+    );
+    let change_id = parse_created_change(&land);
+    nit(workspace, ["push"]).success();
+
+    (fixture, change_id)
 }
 
 fn nit<const N: usize>(dir: &Path, args: [&str; N]) -> assert_cmd::assert::Assert {

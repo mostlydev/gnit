@@ -303,6 +303,7 @@ dependencies = [
  "clap",
  "predicates",
  "serde",
+ "serde_json",
  "serde_yaml",
  "sigpipe",
  "tempfile",

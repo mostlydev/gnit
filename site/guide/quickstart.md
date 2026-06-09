@@ -37,6 +37,7 @@ nit push
 nit add -A
 nit land -m "Publish webhook retry update"
 nit push
+nit pr open
 ```
 
 `nit land` is the human-facing publish verb. It commits staged member changes,
@@ -44,6 +45,32 @@ creates an unnamed Pin, and lets `nit push` publish member commits before the Pi
 If one member push fails, Nit reports what landed, leaves later targets
 not-attempted, and holds the workspace root back. After resolving the member
 repo, run `nit push` again, or use `nit push --resume` as an explicit retry.
+
+`nit pr open` creates or adopts the ordinary GitHub PRs for the current Change
+and writes Nit-owned cross-links into each PR body. It opens draft PRs by
+default. `nit pr` is the read-only status command to check what exists, what is
+missing, and which checks are passing:
+
+```text
+$ nit pr
+Workspace change NCH-1780970169140-000018d60000000000000000
+repo                         branch              base        pr        state     checks
+root (metadata)              feature/pr-flow     master      #1        open      pending
+sdk                          feature/pr-flow     master      #2        open      pass
+app                          feature/pr-flow     master      missing   -         -
+
+$ nit pr open
+Opening PRs for Change NCH-1780970169140-000018d60000000000000000
+Title: Add linked PR flow
+Mode: draft
+  root                     already open
+  sdk                      already open
+  app                      created
+PRs synchronized.
+```
+
+Re-running `nit pr open` is safe: it refreshes already-open PRs instead of
+duplicating them, so it doubles as the recovery command after a network blip.
 
 ```sh
 nit review <change-id-or-pin>

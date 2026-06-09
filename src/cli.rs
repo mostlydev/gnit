@@ -129,6 +129,13 @@ pub enum Commands {
         #[arg(long)]
         resume: bool,
     },
+    /// Show or open linked GitHub PRs for a workspace Change.
+    Pr {
+        #[command(subcommand)]
+        command: Option<PrCommands>,
+        #[command(flatten)]
+        args: PrStatusArgs,
+    },
     /// Render a combined review artifact for a Change or Pin.
     Review {
         /// Change id or Pin id/label.
@@ -163,6 +170,47 @@ pub enum ChangeCommands {
     Log { id: Option<String> },
     /// Show per-repo diffs for a Change.
     Diff { id: String },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum PrCommands {
+    /// Create, adopt, and refresh linked draft PRs.
+    Open(PrOpenArgs),
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct PrStatusArgs {
+    /// Change id to project. Defaults to the single Change on the current branch.
+    #[arg(long, conflicts_with = "pin")]
+    pub change: Option<String>,
+    /// Pin id or label. Must record exactly one provenance Change.
+    #[arg(long, conflicts_with = "change")]
+    pub pin: Option<String>,
+    /// Base branch for all repos. Defaults to each repo's origin default branch.
+    #[arg(long)]
+    pub base: Option<String>,
+}
+
+#[derive(Debug, Args, Clone)]
+pub struct PrOpenArgs {
+    /// Change id to project. Defaults to the single Change on the current branch.
+    #[arg(long, conflicts_with = "pin")]
+    pub change: Option<String>,
+    /// Pin id or label. Must record exactly one provenance Change.
+    #[arg(long, conflicts_with = "change")]
+    pub pin: Option<String>,
+    /// Base branch for all repos. Defaults to each repo's origin default branch.
+    #[arg(long)]
+    pub base: Option<String>,
+    /// Pull request title. Defaults to the Change commit subject.
+    #[arg(long)]
+    pub title: Option<String>,
+    /// Head branch override for detached worktrees.
+    #[arg(long)]
+    pub branch: Option<String>,
+    /// Open PRs ready for review. The default is draft.
+    #[arg(long)]
+    pub ready: bool,
 }
 
 #[derive(Debug, Subcommand)]

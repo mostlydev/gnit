@@ -1,6 +1,7 @@
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use anyhow::{bail, Context, Result};
 
@@ -108,6 +109,7 @@ pub fn doctor() -> Result<()> {
         Ok(version) => println!("  git: {}", version.trim()),
         Err(err) => println!("  git: not available ({err})"),
     }
+    report_gh_health();
 
     match find_nit_workspace(env::current_dir()?.as_path()) {
         Some(root) => {
@@ -124,6 +126,33 @@ pub fn doctor() -> Result<()> {
 
     println!("  upkeep: automatic non-destructive upkeep enabled");
     Ok(())
+}
+
+fn report_gh_health() {
+    let gh = env::var("NIT_GH_BIN").unwrap_or_else(|_| "gh".to_string());
+    match Command::new(&gh).arg("--version").output() {
+        Ok(output) if output.status.success() => {
+            let version = String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .next()
+                .unwrap_or("gh available")
+                .to_string();
+            let auth = Command::new(&gh).args(["auth", "status"]).output();
+            match auth {
+                Ok(auth) if auth.status.success() => println!("  gh: {version}; auth ok"),
+                Ok(auth) => println!(
+                    "  gh: {version}; auth unavailable ({})",
+                    String::from_utf8_lossy(&auth.stderr).trim()
+                ),
+                Err(err) => println!("  gh: {version}; auth check failed ({err})"),
+            }
+        }
+        Ok(output) => println!(
+            "  gh: not available ({})",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ),
+        Err(err) => println!("  gh: not available ({err})"),
+    }
 }
 
 pub fn ignore(paths: Vec<PathBuf>) -> Result<()> {

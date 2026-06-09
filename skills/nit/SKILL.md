@@ -39,12 +39,14 @@ nit push                 # publish members first, then workspace metadata
 # Or publish a reproducible snapshot in one step.
 nit land -m "Release the new field"   # commit + pin together
 nit push
+nit pr open             # create/adopt linked draft GitHub PRs
 ```
 
 Inspect and reconstruct:
 
 ```sh
 nit status               # root/members, staged/modified/untracked, pin drift, discovered repos
+nit pr                   # linked PR status for the current Change
 nit log                  # unified newest-first timeline of Changes and Pins
 nit change show <id>     # the commits that make up a Change
 nit review <id-or-pin>   # combined review artifact
@@ -63,6 +65,11 @@ nit clone <url> dir --pin <label>   # rebuild a workspace and materialize a Pin
   After fixing the member, run `nit push` again, or `nit push --resume` as the
   explicit retry spelling. Nit never force-pushes; a non-fast-forward is a hard
   failure to resolve in the member, not to override.
+- **PRs stay ordinary GitHub PRs.** After `nit push`, run `nit pr` to inspect
+  the PR projection or `nit pr open` to create/adopt linked draft PRs. Nit
+  derives the current Change, branch, base, and title in the common case. Use
+  `--change`, `--pin`, `--base`, `--title`, `--branch`, or `--ready` only as
+  escape hatches. Nit only rewrites its own marker block in PR bodies.
 - **Pins require clean members.** `nit pin` and `nit land` refuse a dirty member
   worktree, because a Pin must capture exact, reproducible commits. Commit or
   stash member changes first.
@@ -78,6 +85,34 @@ nit clone <url> dir --pin <label>   # rebuild a workspace and materialize a Pin
   on each command. Do not hand-edit `.nit/` machinery to work around it.
 - **Updating is explicit.** `nit update` replaces the binary on request; Nit
   never auto-updates. `nit doctor` diagnoses the install and workspace.
+
+## Linking PRs
+
+After `nit push`, `nit pr` shows one row per repo for the current Change — open,
+`missing`, or a metadata-only `root (metadata)` anchor:
+
+```text
+$ nit pr
+Workspace change NCH-1780970169140-000018d60000000000000000
+repo                         branch              base        pr        state     checks
+root (metadata)              feature/pr-flow     master      #1        open      pending
+sdk                          feature/pr-flow     master      #2        open      pass
+app                          feature/pr-flow     master      missing   -         -
+```
+
+`nit pr open` creates only the missing PRs, adopts an existing same-branch PR,
+and is safe to re-run — it refreshes rather than duplicates. Blockers stop before
+any PR is created and name the exact fix; act on the message instead of guessing:
+
+- `... is not at local HEAD ...; run nit push before nit pr open` — the branch is
+  not fully pushed. Run `nit push`, then retry `nit pr open`.
+- `multiple Nit Changes found on the PR branch (...); rerun with nit pr --change <id>`
+  — the branch carries more than one Change. Re-run with the `--change <id>` it
+  names.
+
+Never hand-edit the `<!-- nit-pr-sync:start -->` / `<!-- nit-pr-sync:end -->`
+marker block in a PR body — it is Nit-owned. Re-run `nit pr open` to refresh it;
+author text outside the block is preserved.
 
 ## When something is off
 

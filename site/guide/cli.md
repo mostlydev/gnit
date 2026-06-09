@@ -15,6 +15,8 @@ nit commit -m <msg>
 nit land [<name>] -m <msg>
 nit checkout <pin> [--exact]
 nit push [--resume]
+nit pr [--change <id>|--pin <pin>] [--base <branch>]
+nit pr open [--change <id>|--pin <pin>] [--base <branch>] [--title <title>] [--branch <branch>] [--ready]
 nit review <change-id|pin>
 nit status
 nit log
@@ -37,9 +39,9 @@ excludes, clone and hydrate a workspace, convert a submodule to a member, stage
 workspace paths, commit staged root/member changes under one `Nit-Change-Id`,
 land a change with a Pin, inspect trailer-based changes, record committed member
 HEADs as a Pin, materialize Pins with safe checkout defaults, push members
-before workspace metadata, render combined review output, repair local excludes
-with `doctor`, follow the explicit update path, and install its bundled agent
-skill into supported harnesses.
+before workspace metadata, create/adopt linked GitHub PRs, render combined
+review output, repair local excludes with `doctor`, follow the explicit update
+path, and install its bundled agent skill into supported harnesses.
 
 The v0 human workflow is intentionally small:
 
@@ -58,6 +60,8 @@ nit add -A
 nit commit -m <msg>
 nit land [<name>] -m <msg>
 nit push
+nit pr
+nit pr open
 
 nit pin <name>
 nit checkout <pin>
@@ -75,6 +79,63 @@ or held back. If a member fails, the root stays unpublished so Pins do not point
 at missing member commits. Retry with `nit push` or `nit push --resume`; both use
 the same strict ordered policy, and `--resume` is just the explicit retry
 spelling.
+
+`nit pr` shows the linked GitHub PR projection for the current Change. It is
+read-only and degrades when GitHub is unavailable by keeping local branch/change
+information visible and marking remote PR/check state unknown. `nit pr open`
+preflights every PR-capable participant, then creates missing draft PRs, adopts
+existing same-head PRs, and refreshes the Nit-owned marker block in each PR body.
+The common case has no required flags after `nit push`; Nit derives the Change,
+head branch, base branch, and title from Git. Use `--change`, `--pin`, `--base`,
+`--title`, `--branch`, or `--ready` only when the derived default is not right.
+`--branch` is a last-resort head override; after `nit push` every participant is
+already on a published branch, so the common path never needs it.
+
+`nit pr` projects the workspace Change onto one row per repo. A member with no PR
+yet shows `missing`; a metadata-only root is labelled `root (metadata)`:
+
+```text
+$ nit pr
+Workspace change NCH-1780970169140-000018d60000000000000000
+repo                         branch              base        pr        state     checks
+root (metadata)              feature/pr-flow     master      #1        open      pending
+sdk                          feature/pr-flow     master      #2        open      pass
+app                          feature/pr-flow     master      missing   -         -
+```
+
+`nit pr open` creates only what is missing, adopts an existing same-branch PR,
+and reports per repo. Re-running is safe — already-open PRs are refreshed, not
+duplicated:
+
+```text
+$ nit pr open
+Opening PRs for Change NCH-1780970169140-000018d60000000000000000
+Title: Add linked PR flow
+Mode: draft
+  root                     already open
+  sdk                      already open
+  app                      created
+PRs synchronized.
+```
+
+Every blocker stops before any PR is created and prints the exact command to fix
+it. A participant whose pushed branch is behind its local HEAD:
+
+```text
+$ nit pr open
+Error: pr open blocked before creating PRs:
+  root: origin/feature/not-pushed is not at local HEAD 85ebde94719d; run `nit push` before `nit pr open`
+  sdk: origin/feature/not-pushed is not at local HEAD f799018b09e6; run `nit push` before `nit pr open`
+  app: origin/feature/not-pushed is not at local HEAD 82373d353a2d; run `nit push` before `nit pr open`
+```
+
+And an ambiguous branch carrying more than one Change refuses rather than
+guessing, naming the ids to pick from:
+
+```text
+$ nit pr
+Error: multiple Nit Changes found on the PR branch (NCH-1780970236148-00002c2c0000000000000000, NCH-1780970236230-00002c780000000000000000); rerun with `nit pr --change <id>`
+```
 
 `nit checkout <pin>` materializes exact member commits and refuses dirty member
 worktrees unless `--exact` is passed. When the pinned commit is the tip of a
