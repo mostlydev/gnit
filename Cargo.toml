@@ -1,6 +1,6 @@
 [package]
 name = "nit"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 description = "Git-native multi-repo workspaces"
 license = "MIT"
