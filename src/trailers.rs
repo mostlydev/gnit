@@ -30,20 +30,38 @@ pub fn change_id(message: &str) -> Option<String> {
         .map(|index| index + 1)
         .unwrap_or(0);
 
-    let mut found = None;
-    for line in &lines[start..end] {
-        let Some(rest) = line.strip_prefix(TRAILER) else {
+    let trailers = parse_trailer_block(&lines[start..end])?;
+    trailers
+        .into_iter()
+        .rev()
+        .find_map(|(key, value)| (key == TRAILER).then_some(value))
+        .filter(|value| is_valid_change_id(value))
+}
+
+fn parse_trailer_block(lines: &[&str]) -> Option<Vec<(String, String)>> {
+    let mut trailers: Vec<(String, String)> = Vec::new();
+    for line in lines {
+        if line.starts_with(' ') || line.starts_with('\t') {
+            let (_, value) = trailers.last_mut()?;
+            if !value.is_empty() {
+                value.push(' ');
+            }
+            value.push_str(line.trim());
             continue;
-        };
-        let Some(value) = rest.strip_prefix(':') else {
-            continue;
-        };
-        let value = value.trim();
-        if is_valid_change_id(value) {
-            found = Some(value.to_string());
         }
+
+        let (key, value) = split_trailer_line(line)?;
+        trailers.push((key.to_string(), value.to_string()));
     }
-    found
+    Some(trailers)
+}
+
+fn split_trailer_line(line: &str) -> Option<(&str, &str)> {
+    let (key, value) = line.split_once(':')?;
+    if key.is_empty() || key.chars().any(char::is_whitespace) {
+        return None;
+    }
+    Some((key, value.trim()))
 }
 
 /// Strict validation of the id shape minted by `ids::change_id`:
@@ -95,6 +113,12 @@ mod tests {
     }
 
     #[test]
+    fn ignores_final_paragraph_that_is_not_a_trailer_block() {
+        let body = "Subject line\n\nFinal prose line.\nGnit-Change-Id: GCH-1760000000000-72e5";
+        assert_eq!(change_id(body), None);
+    }
+
+    #[test]
     fn ignores_trailer_shaped_line_in_middle_paragraph() {
         let body =
             "Subject line\n\nGnit-Change-Id: GCH-1760000000000-72e5\n\nFinal prose paragraph.";
@@ -141,6 +165,12 @@ mod tests {
     }
 
     #[test]
+    fn invalid_last_duplicate_trailer_replaces_prior_valid_value() {
+        let body = "Subject line\n\nGnit-Change-Id: GCH-1760000000000-72e5\nGnit-Change-Id: not-a-change-id";
+        assert_eq!(change_id(body), None);
+    }
+
+    #[test]
     fn coexists_with_other_trailers_in_the_block() {
         let body =
             "Subject line\n\nReviewed-by: Someone <x@example.com>\nGnit-Change-Id: GCH-1760000000000-72e5\nSigned-off-by: Someone <x@example.com>";
@@ -150,6 +180,12 @@ mod tests {
     #[test]
     fn ignores_indented_continuation_lines() {
         let body = "Subject line\n\nNote: something\n  Gnit-Change-Id: GCH-1760000000000-72e5";
+        assert_eq!(change_id(body), None);
+    }
+
+    #[test]
+    fn continuation_after_change_id_makes_the_value_invalid() {
+        let body = "Subject line\n\nGnit-Change-Id: GCH-1760000000000-72e5\n continuation";
         assert_eq!(change_id(body), None);
     }
 
