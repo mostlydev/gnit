@@ -63,7 +63,7 @@ fn status_outside_workspace_is_clear() {
 fn init_and_adopt_nested_repo_workflow_preserves_root_staging() {
     let temp = tempfile::tempdir().unwrap();
     let workspace = temp.path();
-    git(workspace, ["init"]);
+    git_init(workspace);
     git(workspace, ["config", "user.email", "nit-test@example.com"]);
     git(workspace, ["config", "user.name", "Nit Test"]);
 
@@ -72,7 +72,7 @@ fn init_and_adopt_nested_repo_workflow_preserves_root_staging() {
     git(workspace, ["commit", "-m", "Initial root"]);
 
     std::fs::create_dir_all(workspace.join("vendor/sdk")).unwrap();
-    git(&workspace.join("vendor/sdk"), ["init"]);
+    git_init(&workspace.join("vendor/sdk"));
     git(
         &workspace.join("vendor/sdk"),
         ["config", "user.email", "nit-test@example.com"],
@@ -91,19 +91,11 @@ fn init_and_adopt_nested_repo_workflow_preserves_root_staging() {
     std::fs::write(workspace.join("UNRELATED.txt"), "keep me staged\n").unwrap();
     git(workspace, ["add", "UNRELATED.txt"]);
 
-    Command::cargo_bin("nit")
-        .unwrap()
-        .arg("init")
-        .current_dir(workspace)
-        .assert()
+    nit(workspace, ["init"])
         .success()
         .stdout(predicate::str::contains("initialized Nit workspace"));
 
-    Command::cargo_bin("nit")
-        .unwrap()
-        .args(["adopt", "vendor/sdk", "--id", "sdk"])
-        .current_dir(workspace)
-        .assert()
+    nit(workspace, ["adopt", "vendor/sdk", "--id", "sdk"])
         .success()
         .stdout(predicate::str::contains("adopted sdk"));
 
@@ -125,33 +117,25 @@ fn init_and_adopt_nested_repo_workflow_preserves_root_staging() {
         !root_status.lines().any(|line| line.contains(".nit/")),
         "Nit metadata should have been committed: {root_status}"
     );
+    assert!(
+        !root_status.lines().any(|line| line.contains("AGENTS.md")),
+        "Nit guidance should have been committed: {root_status}"
+    );
 
     let last_commit = git_out(workspace, ["log", "-1", "--pretty=%s"]);
     assert_eq!(last_commit.trim(), "Update Nit roster");
 
-    Command::cargo_bin("nit")
-        .unwrap()
-        .arg("status")
-        .current_dir(workspace)
-        .assert()
+    nit(workspace, ["status"])
         .success()
         .stdout(predicate::str::contains("Repos"))
         .stdout(predicate::str::contains("sdk"))
         .stdout(predicate::str::contains("clean"));
 
-    Command::cargo_bin("nit")
-        .unwrap()
-        .arg("doctor")
-        .current_dir(workspace)
-        .assert()
+    nit(workspace, ["doctor"])
         .success()
         .stdout(predicate::str::contains("roster members: 1"));
 
-    Command::cargo_bin("nit")
-        .unwrap()
-        .args(["pin", "baseline"])
-        .current_dir(workspace)
-        .assert()
+    nit(workspace, ["pin", "baseline"])
         .failure()
         .stderr(predicate::str::contains(
             "workspace root has uncommitted changes",
@@ -160,11 +144,7 @@ fn init_and_adopt_nested_repo_workflow_preserves_root_staging() {
     git(workspace, ["commit", "-m", "Keep unrelated file"]);
 
     let sdk_head = git_out(&workspace.join("vendor/sdk"), ["rev-parse", "HEAD"]);
-    Command::cargo_bin("nit")
-        .unwrap()
-        .args(["pin", "baseline"])
-        .current_dir(workspace)
-        .assert()
+    nit(workspace, ["pin", "baseline"])
         .success()
         .stdout(predicate::str::contains("created Pin PIN-"));
 
@@ -181,6 +161,156 @@ fn init_and_adopt_nested_repo_workflow_preserves_root_staging() {
 
     let last_commit = git_out(workspace, ["log", "-1", "--pretty=%s"]);
     assert!(last_commit.starts_with("Create Nit pin PIN-"));
+}
+
+#[test]
+fn init_creates_and_commits_agent_guidance() {
+    let temp = tempfile::tempdir().unwrap();
+    let workspace = temp.path();
+    git_init(workspace);
+    git(workspace, ["config", "user.email", "nit-test@example.com"]);
+    git(workspace, ["config", "user.name", "Nit Test"]);
+    fs::write(workspace.join("README.md"), "root\n").unwrap();
+    git(workspace, ["add", "README.md"]);
+    git(workspace, ["commit", "-m", "Initial root"]);
+
+    nit(workspace, ["init"])
+        .success()
+        .stdout(predicate::str::contains("initialized Nit workspace"));
+
+    let agents = fs::read_to_string(workspace.join("AGENTS.md")).unwrap();
+    assert_nit_guidance(&agents);
+    assert!(
+        !workspace.join("CLAUDE.md").exists(),
+        "CLAUDE.md should not be created unless already present"
+    );
+    let status = git_out(
+        workspace,
+        [
+            "status",
+            "--porcelain",
+            "--",
+            ".nit",
+            "AGENTS.md",
+            "CLAUDE.md",
+        ],
+    );
+    assert!(
+        status.trim().is_empty(),
+        "init should commit Nit metadata and guidance docs: {status}"
+    );
+    let last_commit = git_out(workspace, ["log", "-1", "--pretty=%s"]);
+    assert_eq!(last_commit.trim(), "Initialize Nit workspace");
+}
+
+#[test]
+fn control_init_creates_repo_and_commits_agent_guidance() {
+    let temp = tempdir_without_nit_ancestor();
+    let workspace = temp.path();
+
+    nit(workspace, ["init", "--control"])
+        .success()
+        .stdout(predicate::str::contains("initialized Nit workspace"));
+
+    assert!(workspace.join(".git").exists());
+    let agents = fs::read_to_string(workspace.join("AGENTS.md")).unwrap();
+    assert_nit_guidance(&agents);
+    let status = git_out(
+        workspace,
+        ["status", "--porcelain", "--", ".nit", "AGENTS.md"],
+    );
+    assert!(
+        status.trim().is_empty(),
+        "control init should commit metadata and guidance docs: {status}"
+    );
+    let last_commit = git_out(workspace, ["log", "-1", "--pretty=%s"]);
+    assert_eq!(last_commit.trim(), "Initialize Nit workspace");
+}
+
+#[test]
+fn init_updates_existing_agent_docs_without_rewriting_marked_block() {
+    let temp = tempfile::tempdir().unwrap();
+    let workspace = temp.path();
+    git_init(workspace);
+    git(workspace, ["config", "user.email", "nit-test@example.com"]);
+    git(workspace, ["config", "user.name", "Nit Test"]);
+    let custom_agents =
+        "<!-- nit:workspace:start -->\nCustom Nit note.\n<!-- nit:workspace:end -->\n";
+    fs::write(workspace.join("AGENTS.md"), custom_agents).unwrap();
+    fs::write(workspace.join("CLAUDE.md"), "# Claude notes\n").unwrap();
+    git(workspace, ["add", "AGENTS.md", "CLAUDE.md"]);
+    git(workspace, ["commit", "-m", "Add agent docs"]);
+
+    nit(workspace, ["init"]).success();
+
+    let agents = fs::read_to_string(workspace.join("AGENTS.md")).unwrap();
+    assert_eq!(agents, custom_agents);
+    let claude = fs::read_to_string(workspace.join("CLAUDE.md")).unwrap();
+    assert!(claude.starts_with("# Claude notes\n\n"), "{claude}");
+    assert_nit_guidance(&claude);
+    let status = git_out(
+        workspace,
+        [
+            "status",
+            "--porcelain",
+            "--",
+            ".nit",
+            "AGENTS.md",
+            "CLAUDE.md",
+        ],
+    );
+    assert!(
+        status.trim().is_empty(),
+        "init should commit changed Nit guidance docs: {status}"
+    );
+}
+
+#[test]
+fn doctor_repairs_agent_guidance_without_duplicates() {
+    let fixture = clean_workspace_with_sdk();
+    let workspace = fixture.root.as_path();
+    fs::write(workspace.join("AGENTS.md"), "Team notes\n").unwrap();
+
+    nit(workspace, ["doctor"])
+        .success()
+        .stdout(predicate::str::contains("agent guidance: added"));
+    let agents = fs::read_to_string(workspace.join("AGENTS.md")).unwrap();
+    assert!(agents.contains("Team notes"), "{agents}");
+    assert_nit_guidance(&agents);
+
+    nit(workspace, ["doctor"])
+        .success()
+        .stdout(predicate::str::contains("agent guidance: ok"));
+    let agents = fs::read_to_string(workspace.join("AGENTS.md")).unwrap();
+    assert_eq!(nit_guidance_count(&agents), 1, "{agents}");
+}
+
+#[test]
+fn local_init_writes_agent_guidance_without_commit() {
+    let temp = tempfile::tempdir().unwrap();
+    let workspace = temp.path();
+    git_init(workspace);
+    git(workspace, ["config", "user.email", "nit-test@example.com"]);
+    git(workspace, ["config", "user.name", "Nit Test"]);
+    fs::write(workspace.join("README.md"), "root\n").unwrap();
+    git(workspace, ["add", "README.md"]);
+    git(workspace, ["commit", "-m", "Initial root"]);
+
+    nit(workspace, ["init", "--local"]).success();
+
+    let agents = fs::read_to_string(workspace.join("AGENTS.md")).unwrap();
+    assert_nit_guidance(&agents);
+    let status = git_out(workspace, ["status", "--porcelain"]);
+    assert!(
+        status.lines().any(|line| line == "?? .nit/"),
+        "local init should leave metadata uncommitted: {status}"
+    );
+    assert!(
+        status.lines().any(|line| line == "?? AGENTS.md"),
+        "local init should leave guidance uncommitted: {status}"
+    );
+    let last_commit = git_out(workspace, ["log", "-1", "--pretty=%s"]);
+    assert_eq!(last_commit.trim(), "Initial root");
 }
 
 #[test]
@@ -1047,10 +1177,8 @@ fn pr_status_degrades_when_gh_is_offline() {
     let commit = nit(workspace, ["commit", "-m", "Update offline SDK"]);
     let change_id = parse_created_change(&commit);
 
-    let mut cmd = Command::cargo_bin("nit").unwrap();
-    cmd.current_dir(workspace)
-        .env("NIT_GH_BIN", workspace.join("missing-gh"))
-        .args(["pr", "--change", &change_id])
+    let mut cmd = nit_command(workspace, ["pr", "--change", &change_id]);
+    cmd.env("NIT_GH_BIN", workspace.join("missing-gh"))
         .assert()
         .success()
         .stdout(predicate::str::contains("Workspace change"))
@@ -1143,6 +1271,188 @@ fn pr_status_shows_mixed_states_and_checks() {
         .stdout(predicate::str::contains("pass"))
         .stdout(predicate::str::contains("closed"))
         .stdout(predicate::str::contains("fail"));
+}
+
+#[cfg(unix)]
+#[test]
+fn pr_open_preflight_failure_does_not_create_any_prs() {
+    let fixture = workspace_with_three_member_remotes();
+    let workspace = fixture.root.as_path();
+    prepare_pr_base_refs(workspace, ["sdk", "app", "docs"]);
+
+    git(workspace, ["checkout", "-b", "feature/not-pushed"]);
+    git(
+        &workspace.join("sdk"),
+        ["checkout", "-b", "feature/not-pushed"],
+    );
+    git(
+        &workspace.join("app"),
+        ["checkout", "-b", "feature/not-pushed"],
+    );
+
+    fs::write(workspace.join("README.md"), "root not pushed\n").unwrap();
+    fs::write(workspace.join("sdk/sdk.txt"), "sdk not pushed\n").unwrap();
+    fs::write(workspace.join("app/app.txt"), "app not pushed\n").unwrap();
+    nit(
+        workspace,
+        ["add", "README.md", "sdk/sdk.txt", "app/app.txt"],
+    );
+    let land = nit(workspace, ["land", "review-pin", "-m", "Add unpushed flow"]);
+    let change_id = parse_created_change(&land);
+
+    let gh = fake_gh();
+    gh.command(workspace, ["pr", "open", "--change", &change_id])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "pr open blocked before creating PRs",
+        ))
+        .stderr(predicate::str::contains("run `nit push`"));
+
+    let state = gh.state();
+    assert_eq!(state["prs"].as_array().unwrap().len(), 0, "{state}");
+    assert!(
+        !gh.calls().iter().any(|call| call_is(call, "pr", "create")),
+        "preflight failure must not create PRs: {:?}",
+        gh.calls()
+    );
+    assert!(
+        !gh.calls().iter().any(|call| call_is(call, "pr", "edit")),
+        "preflight failure must not edit PR bodies: {:?}",
+        gh.calls()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn pr_open_resumes_after_body_edit_failure() {
+    let (fixture, change_id) = three_repo_pr_change();
+    let workspace = fixture.root.as_path();
+    let gh = fake_gh();
+
+    let mut first = gh.command(workspace, ["pr", "open", "--change", &change_id]);
+    first
+        .env("NIT_FAKE_GH_FAIL_EDIT_REPO", "acme/app")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("pr body update incomplete"))
+        .stderr(predicate::str::contains("forced edit failure for acme/app"));
+
+    let state = gh.state();
+    let prs = state["prs"].as_array().unwrap();
+    assert_eq!(prs.len(), 3, "{state}");
+    let app_body = prs.iter().find(|pr| pr["repo"] == "acme/app").unwrap()["body"]
+        .as_str()
+        .unwrap();
+    assert!(
+        !app_body.contains("acme/root#"),
+        "failed body edit should leave app with its provisional marker: {app_body}"
+    );
+
+    gh.command(workspace, ["pr", "open", "--change", &change_id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("already open"))
+        .stdout(predicate::str::contains("PRs synchronized."));
+
+    let state = gh.state();
+    for pr in state["prs"].as_array().unwrap() {
+        let body = pr["body"].as_str().unwrap();
+        assert!(body.contains("acme/root#"), "{body}");
+        assert!(body.contains("acme/sdk#"), "{body}");
+        assert!(body.contains("acme/app#"), "{body}");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn pr_open_replaces_marker_once_and_preserves_author_text() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+    prepare_pr_base_refs(workspace, ["vendor/sdk"]);
+
+    let sdk = workspace.join("vendor/sdk");
+    git(&sdk, ["checkout", "-b", "feature/replace-marker"]);
+    fs::write(
+        sdk.join("lib.rs"),
+        "pub fn sdk() -> &'static str { \"replace\" }\n",
+    )
+    .unwrap();
+    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    let commit = nit(workspace, ["commit", "-m", "Update marker body"]);
+    let change_id = parse_created_change(&commit);
+    nit(workspace, ["push"]).success();
+
+    let old_body = format!(
+        "Intro stays.\n\n<!-- nit-pr-sync:start -->\nNit-Change-Id: {change_id}\nOld: remove me\n<!-- nit-pr-sync:end -->\n\nFooter stays."
+    );
+    let gh = fake_gh();
+    gh.write_state(json!({
+        "next": 2,
+        "prs": [{
+            "repo": "acme/sdk",
+            "number": 1,
+            "state": "OPEN",
+            "url": "https://github.com/acme/sdk/pull/1",
+            "title": "Manual PR",
+            "head": "feature/replace-marker",
+            "body": old_body,
+            "checks": []
+        }]
+    }));
+
+    gh.command(workspace, ["pr", "open", "--change", &change_id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("already open"));
+
+    let state = gh.state();
+    let body = state["prs"][0]["body"].as_str().unwrap();
+    assert!(body.contains("Intro stays."), "{body}");
+    assert!(body.contains("Footer stays."), "{body}");
+    assert!(!body.contains("Old: remove me"), "{body}");
+    assert_eq!(
+        body.matches("<!-- nit-pr-sync:start -->").count(),
+        1,
+        "{body}"
+    );
+    assert_eq!(
+        body.matches("<!-- nit-pr-sync:end -->").count(),
+        1,
+        "{body}"
+    );
+    assert!(body.contains("Member PRs:\n- acme/sdk#1 @"), "{body}");
+}
+
+#[cfg(unix)]
+#[test]
+fn pr_open_ready_creates_non_draft_prs() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+    prepare_pr_base_refs(workspace, ["vendor/sdk"]);
+
+    let sdk = workspace.join("vendor/sdk");
+    git(&sdk, ["checkout", "-b", "feature/ready-pr"]);
+    fs::write(
+        sdk.join("lib.rs"),
+        "pub fn sdk() -> &'static str { \"ready\" }\n",
+    )
+    .unwrap();
+    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    nit(workspace, ["commit", "-m", "Update ready PR"]);
+    nit(workspace, ["push"]).success();
+
+    let gh = fake_gh();
+    gh.command(workspace, ["pr", "open", "--ready"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Mode: ready"))
+        .stdout(predicate::str::contains("created"));
+
+    let state = gh.state();
+    let prs = state["prs"].as_array().unwrap();
+    assert_eq!(prs.len(), 1, "{state}");
+    assert_eq!(prs[0]["draft"], false, "{state}");
 }
 
 #[cfg(unix)]
@@ -1400,7 +1710,7 @@ fn import_submodule_workflow_converts_gitlink_to_member() {
     let temp = tempfile::tempdir().unwrap();
     let workspace = temp.path().join("workspace");
     std::fs::create_dir(&workspace).unwrap();
-    git(&workspace, ["init"]);
+    git_init(&workspace);
     git(&workspace, ["config", "user.email", "nit-test@example.com"]);
     git(&workspace, ["config", "user.name", "Nit Test"]);
     std::fs::write(workspace.join("README.md"), "root\n").unwrap();
@@ -1409,7 +1719,7 @@ fn import_submodule_workflow_converts_gitlink_to_member() {
 
     let sub_source = temp.path().join("sub-source");
     std::fs::create_dir(&sub_source).unwrap();
-    git(&sub_source, ["init"]);
+    git_init(&sub_source);
     git(
         &sub_source,
         ["config", "user.email", "nit-test@example.com"],
@@ -1466,7 +1776,7 @@ fn status_reports_member_state_and_discovered() {
     let ws = fixture.root.as_path();
     std::fs::write(ws.join("vendor/sdk/new.txt"), "x\n").unwrap();
     std::fs::create_dir_all(ws.join("scratch")).unwrap();
-    git(&ws.join("scratch"), ["init"]);
+    git_init(&ws.join("scratch"));
 
     nit(ws, ["status"])
         .success()
@@ -1540,12 +1850,221 @@ fn status_includes_dirty_root_repo() {
     );
 }
 
+// ---- Error-contract sweep ---------------------------------------------------
+// Deterministic, no-network coverage of the CLI's `bail!` surface: argument
+// validation, "outside a workspace", and unknown-id handling. These guard the
+// promises Nit makes in its error messages, which agents and scripts depend on.
+
+#[test]
+fn add_rejects_all_combined_with_paths() {
+    let fixture = clean_workspace_with_sdk();
+    nit(fixture.root.as_path(), ["add", "-A", "README.md"])
+        .failure()
+        .stderr(predicate::str::contains(
+            "use either `nit add -A` or explicit paths, not both",
+        ));
+}
+
+#[test]
+fn add_requires_paths_or_all() {
+    let fixture = clean_workspace_with_sdk();
+    nit(fixture.root.as_path(), ["add"])
+        .failure()
+        .stderr(predicate::str::contains("nothing specified"));
+}
+
+#[test]
+fn add_outside_workspace_is_rejected() {
+    let temp = tempdir_without_nit_ancestor();
+    nit(temp.path(), ["add", "README.md"])
+        .failure()
+        .stderr(predicate::str::contains("not in a Nit workspace"));
+}
+
+#[test]
+fn commit_without_staged_changes_is_rejected() {
+    let fixture = clean_workspace_with_sdk();
+    nit(fixture.root.as_path(), ["commit", "-m", "nothing here"])
+        .failure()
+        .stderr(predicate::str::contains("no staged changes to commit"));
+}
+
+#[test]
+fn init_in_existing_workspace_is_rejected() {
+    let fixture = clean_workspace_with_sdk();
+    nit(fixture.root.as_path(), ["init"])
+        .failure()
+        .stderr(predicate::str::contains("Nit workspace already exists"));
+}
+
+#[test]
+fn adopt_duplicate_id_is_rejected() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    let other = ws.join("vendor/other");
+    std::fs::create_dir_all(&other).unwrap();
+    git_init(&other);
+    std::fs::write(other.join("f.txt"), "x\n").unwrap();
+    git(&other, ["add", "f.txt"]);
+    git(&other, ["commit", "-m", "Initial other"]);
+
+    nit(ws, ["adopt", "vendor/other", "--id", "sdk"])
+        .failure()
+        .stderr(predicate::str::contains("member id sdk already exists"));
+}
+
+#[test]
+fn adopt_id_with_multiple_paths_is_rejected() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    for name in ["a", "b"] {
+        let member = ws.join(format!("vendor/{name}"));
+        std::fs::create_dir_all(&member).unwrap();
+        git_init(&member);
+        std::fs::write(member.join("f.txt"), "x\n").unwrap();
+        git(&member, ["add", "f.txt"]);
+        git(&member, ["commit", "-m", "Initial member"]);
+    }
+    nit(ws, ["adopt", "vendor/a", "vendor/b", "--id", "x"])
+        .failure()
+        .stderr(predicate::str::contains(
+            "--id can only be used when adopting one path",
+        ));
+}
+
+#[test]
+fn clone_into_existing_target_is_rejected() {
+    let fixture = workspace_with_remotes();
+    let root_remote = fixture.root_remote.to_str().unwrap();
+    let target = fixture._temp.path().join("occupied");
+    std::fs::create_dir_all(&target).unwrap();
+    nit(
+        fixture._temp.path(),
+        ["clone", root_remote, target.to_str().unwrap()],
+    )
+    .failure()
+    .stderr(predicate::str::contains("already exists"));
+}
+
+#[test]
+fn checkout_unknown_pin_is_rejected() {
+    let fixture = clean_workspace_with_sdk();
+    nit(fixture.root.as_path(), ["checkout", "nonesuch"])
+        .failure()
+        .stderr(predicate::str::contains("pin nonesuch not found"));
+}
+
+#[test]
+fn pin_with_no_members_is_rejected() {
+    let fixture = empty_workspace();
+    nit(fixture.root.as_path(), ["pin", "baseline"])
+        .failure()
+        .stderr(predicate::str::contains(
+            "cannot pin a workspace with no members",
+        ));
+}
+
+#[test]
+fn change_show_unknown_is_rejected() {
+    let fixture = clean_workspace_with_sdk();
+    nit(
+        fixture.root.as_path(),
+        ["change", "show", "NCH-does-not-exist"],
+    )
+    .failure()
+    .stderr(predicate::str::contains("not found"));
+}
+
+#[test]
+fn change_diff_unknown_is_rejected() {
+    let fixture = clean_workspace_with_sdk();
+    nit(
+        fixture.root.as_path(),
+        ["change", "diff", "NCH-does-not-exist"],
+    )
+    .failure()
+    .stderr(predicate::str::contains("not found"));
+}
+
+#[test]
+fn push_rejects_detached_member() {
+    let fixture = workspace_with_remotes();
+    let ws = fixture.root.as_path();
+    git(&ws.join("vendor/sdk"), ["checkout", "--detach", "HEAD"]);
+    nit(ws, ["push"])
+        .failure()
+        .stdout(predicate::str::contains("member sdk"))
+        .stdout(predicate::str::contains(
+            "is detached; checkout a branch before pushing",
+        ))
+        .stderr(predicate::str::contains(
+            "push preflight failed; no repos were pushed",
+        ));
+}
+
+#[test]
+fn skills_install_rejects_explicit_with_all() {
+    // Sandboxed HOME so the real harness skill directories are never touched.
+    let env = skill_env();
+    env.command(["skills", "install", "codex", "--all"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "use either explicit harnesses or --all, not both",
+        ));
+}
+
+// ---- change diff happy path -------------------------------------------------
+
+#[test]
+fn change_diff_shows_per_repo_diffs() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    std::fs::write(ws.join("vendor/sdk/lib.rs"), "pub fn sdk() -> u8 { 7 }\n").unwrap();
+    nit(ws, ["add", "vendor/sdk/lib.rs"]);
+    let commit = nit(ws, ["commit", "-m", "Tweak sdk"]);
+    let change_id = parse_created_change(&commit);
+
+    nit(ws, ["change", "diff", &change_id])
+        .success()
+        .stdout(predicate::str::contains(format!("Change {change_id}")))
+        .stdout(predicate::str::contains("== sdk"))
+        .stdout(predicate::str::contains("Tweak sdk"))
+        .stdout(predicate::str::contains("lib.rs"));
+}
+
+// ---- doctor failure modes ---------------------------------------------------
+
+#[test]
+fn doctor_reports_missing_member() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    std::fs::remove_dir_all(ws.join("vendor/sdk")).unwrap();
+    nit(ws, ["doctor"])
+        .success()
+        .stdout(predicate::str::contains("member sdk: missing"));
+}
+
+#[test]
+fn doctor_reports_remote_drift() {
+    let fixture = workspace_with_remotes();
+    let ws = fixture.root.as_path();
+    git(
+        &ws.join("vendor/sdk"),
+        [
+            "remote",
+            "set-url",
+            "origin",
+            "https://example.invalid/moved.git",
+        ],
+    );
+    nit(ws, ["doctor"])
+        .success()
+        .stdout(predicate::str::contains("member sdk: remote drift"));
+}
+
 fn git<const N: usize>(dir: &Path, args: [&str; N]) {
-    let status = std::process::Command::new("git")
-        .current_dir(dir)
-        .args(args)
-        .status()
-        .unwrap();
+    let status = git_command(dir).args(args).status().unwrap();
     assert!(
         status.success(),
         "git {:?} failed in {}",
@@ -1554,12 +2073,12 @@ fn git<const N: usize>(dir: &Path, args: [&str; N]) {
     );
 }
 
+fn git_init(dir: &Path) {
+    git(dir, ["init", "-b", "master"]);
+}
+
 fn git_args(dir: &Path, args: &[&str]) {
-    let status = std::process::Command::new("git")
-        .current_dir(dir)
-        .args(args)
-        .status()
-        .unwrap();
+    let status = git_command(dir).args(args).status().unwrap();
     assert!(
         status.success(),
         "git {:?} failed in {}",
@@ -1569,11 +2088,7 @@ fn git_args(dir: &Path, args: &[&str]) {
 }
 
 fn git_out<const N: usize>(dir: &Path, args: [&str; N]) -> String {
-    let output = std::process::Command::new("git")
-        .current_dir(dir)
-        .args(args)
-        .output()
-        .unwrap();
+    let output = git_command(dir).args(args).output().unwrap();
     assert!(
         output.status.success(),
         "git {:?} failed in {}: {}",
@@ -1585,7 +2100,7 @@ fn git_out<const N: usize>(dir: &Path, args: [&str; N]) -> String {
 }
 
 fn git_dir_out<const N: usize>(git_dir: &Path, args: [&str; N]) -> String {
-    let output = std::process::Command::new("git")
+    let output = git_base_command()
         .arg("--git-dir")
         .arg(git_dir)
         .args(args)
@@ -1599,6 +2114,30 @@ fn git_dir_out<const N: usize>(git_dir: &Path, args: [&str; N]) -> String {
         String::from_utf8_lossy(&output.stderr)
     );
     String::from_utf8_lossy(&output.stdout).to_string()
+}
+
+fn git_command(dir: &Path) -> std::process::Command {
+    let mut command = git_base_command();
+    command.current_dir(dir);
+    command
+}
+
+fn git_base_command() -> std::process::Command {
+    let mut command = std::process::Command::new("git");
+    command
+        .args([
+            "-c",
+            "init.defaultBranch=master",
+            "-c",
+            "advice.defaultBranchName=false",
+        ])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .env("GIT_AUTHOR_NAME", "Nit Test")
+        .env("GIT_AUTHOR_EMAIL", "nit-test@example.com")
+        .env("GIT_COMMITTER_NAME", "Nit Test")
+        .env("GIT_COMMITTER_EMAIL", "nit-test@example.com");
+    command
 }
 
 fn tempdir_without_nit_ancestor() -> tempfile::TempDir {
@@ -1637,12 +2176,7 @@ fn has_nit_ancestor(path: &Path) -> bool {
 }
 
 fn nit_output<const N: usize>(dir: &Path, args: [&str; N]) -> String {
-    let output = Command::cargo_bin("nit")
-        .unwrap()
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .unwrap();
+    let output = nit_command(dir, args).output().unwrap();
     assert!(
         output.status.success(),
         "nit {:?} failed in {}: {}",
@@ -1656,7 +2190,7 @@ fn nit_output<const N: usize>(dir: &Path, args: [&str; N]) -> String {
 fn clean_workspace_with_sdk() -> Fixture {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().to_path_buf();
-    git(&root, ["init"]);
+    git_init(&root);
     git(&root, ["config", "user.email", "nit-test@example.com"]);
     git(&root, ["config", "user.name", "Nit Test"]);
     std::fs::write(root.join("README.md"), "root\n").unwrap();
@@ -1664,7 +2198,7 @@ fn clean_workspace_with_sdk() -> Fixture {
     git(&root, ["commit", "-m", "Initial root"]);
 
     std::fs::create_dir_all(root.join("vendor/sdk")).unwrap();
-    git(&root.join("vendor/sdk"), ["init"]);
+    git_init(&root.join("vendor/sdk"));
     git(
         &root.join("vendor/sdk"),
         ["config", "user.email", "nit-test@example.com"],
@@ -1679,6 +2213,21 @@ fn clean_workspace_with_sdk() -> Fixture {
 
     nit(&root, ["init"]);
     nit(&root, ["adopt", "vendor/sdk", "--id", "sdk"]);
+
+    Fixture { _temp: temp, root }
+}
+
+fn empty_workspace() -> Fixture {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().to_path_buf();
+    git_init(&root);
+    git(&root, ["config", "user.email", "nit-test@example.com"]);
+    git(&root, ["config", "user.name", "Nit Test"]);
+    std::fs::write(root.join("README.md"), "root\n").unwrap();
+    git(&root, ["add", "README.md"]);
+    git(&root, ["commit", "-m", "Initial root"]);
+
+    nit(&root, ["init"]);
 
     Fixture { _temp: temp, root }
 }
@@ -1700,7 +2249,7 @@ fn workspace_with_remotes() -> RemoteFixture {
 
     let root = temp.path().join("workspace");
     std::fs::create_dir(&root).unwrap();
-    git(&root, ["init"]);
+    git_init(&root);
     git(&root, ["config", "user.email", "nit-test@example.com"]);
     git(&root, ["config", "user.name", "Nit Test"]);
     git(
@@ -1713,7 +2262,7 @@ fn workspace_with_remotes() -> RemoteFixture {
     git(&root, ["push", "origin", "HEAD"]);
 
     std::fs::create_dir_all(root.join("vendor/sdk")).unwrap();
-    git(&root.join("vendor/sdk"), ["init"]);
+    git_init(&root.join("vendor/sdk"));
     git(
         &root.join("vendor/sdk"),
         ["config", "user.email", "nit-test@example.com"],
@@ -1756,7 +2305,7 @@ fn workspace_with_three_member_remotes() -> ThreeMemberRemoteFixture {
 
     let root = temp.path().join("workspace");
     std::fs::create_dir(&root).unwrap();
-    git(&root, ["init"]);
+    git_init(&root);
     git(&root, ["config", "user.email", "nit-test@example.com"]);
     git(&root, ["config", "user.name", "Nit Test"]);
     git(
@@ -1790,7 +2339,7 @@ fn workspace_with_three_member_remotes() -> ThreeMemberRemoteFixture {
 fn create_member_repo(root: &Path, path: &str, remote: &Path, file: &str, content: &str) {
     let member = root.join(path);
     std::fs::create_dir_all(&member).unwrap();
-    git(&member, ["init"]);
+    git_init(&member);
     git(&member, ["config", "user.email", "nit-test@example.com"]);
     git(&member, ["config", "user.name", "Nit Test"]);
     git(
@@ -1903,11 +2452,29 @@ impl FakeGh {
             .env("NIT_GH_BIN", &self.bin)
             .env("NIT_FAKE_GH_STATE", &self.state)
             .env("NIT_NO_UPKEEP", "true");
+        hermetic_git_env(&mut command);
         command
     }
 
     fn state(&self) -> serde_json::Value {
         serde_json::from_str(&fs::read_to_string(&self.state).unwrap()).unwrap()
+    }
+
+    fn calls(&self) -> Vec<Vec<String>> {
+        let state = self.state();
+        state
+            .get("calls")
+            .and_then(|calls| calls.as_array())
+            .into_iter()
+            .flatten()
+            .map(|call| {
+                call.as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|arg| arg.as_str().unwrap().to_string())
+                    .collect::<Vec<_>>()
+            })
+            .collect()
     }
 
     fn write_state(&self, value: serde_json::Value) {
@@ -1930,15 +2497,27 @@ import sys
 
 state_path = os.environ.get("NIT_FAKE_GH_STATE")
 
+def normalize(data):
+    data.setdefault("next", 1)
+    data.setdefault("prs", [])
+    data.setdefault("calls", [])
+    return data
+
 def load():
     if not state_path or not os.path.exists(state_path):
-        return {"next": 1, "prs": []}
+        return normalize({"next": 1, "prs": []})
     with open(state_path) as f:
-        return json.load(f)
+        return normalize(json.load(f))
 
 def save(data):
     with open(state_path, "w") as f:
         json.dump(data, f)
+
+def record(args, data=None):
+    data = data or load()
+    data.setdefault("calls", []).append(args)
+    save(data)
+    return data
 
 def arg_after(args, name):
     if name in args:
@@ -1957,16 +2536,19 @@ def repo_for_cwd():
 
 args = sys.argv[1:]
 if args == ["--version"]:
+    record(args)
     print("gh version 2.93.0 (fake)")
     sys.exit(0)
 if args[:2] == ["auth", "status"]:
+    record(args)
     print("Logged in to github.com as nit-test")
     sys.exit(0)
 if args[:2] == ["repo", "view"]:
+    record(args)
     print(json.dumps({"nameWithOwner": repo_for_cwd()}))
     sys.exit(0)
 if args[:2] == ["pr", "list"]:
-    data = load()
+    data = record(args)
     repo = arg_after(args, "-R")
     head = arg_after(args, "--head")
     search = arg_after(args, "--search")
@@ -1993,7 +2575,7 @@ if args[:2] == ["pr", "list"]:
     print(json.dumps(out))
     sys.exit(0)
 if args[:2] == ["pr", "create"]:
-    data = load()
+    data = record(args)
     repo = arg_after(args, "-R")
     if os.environ.get("NIT_FAKE_GH_FAIL_CREATE_REPO") == repo:
         print(f"forced create failure for {repo}", file=sys.stderr)
@@ -2019,10 +2601,13 @@ if args[:2] == ["pr", "create"]:
     print(pr["url"])
     sys.exit(0)
 if args[:2] == ["pr", "edit"]:
-    data = load()
+    data = record(args)
     number = int(args[2])
     repo = arg_after(args, "-R")
     body = arg_after(args, "--body")
+    if os.environ.get("NIT_FAKE_GH_FAIL_EDIT_REPO") == repo:
+        print(f"forced edit failure for {repo}", file=sys.stderr)
+        sys.exit(1)
     for pr in data["prs"]:
         if pr.get("repo") == repo and int(pr.get("number")) == number:
             pr["body"] = body
@@ -2101,11 +2686,29 @@ fn three_repo_pr_change() -> (ThreeMemberRemoteFixture, String) {
 }
 
 fn nit<const N: usize>(dir: &Path, args: [&str; N]) -> assert_cmd::assert::Assert {
-    Command::cargo_bin("nit")
-        .unwrap()
-        .args(args)
-        .current_dir(dir)
-        .assert()
+    nit_command(dir, args).assert()
+}
+
+/// Build a `nit` invocation whose child Git processes are hermetic: the
+/// developer's global/system Git config (gpgsign, hooksPath, autocrlf, ...) is
+/// neutralized and a deterministic identity is supplied, so Nit's own internal
+/// commits behave identically on every machine. Mirrors `git_base_command` for
+/// the fixtures' direct Git calls.
+fn nit_command<const N: usize>(dir: &Path, args: [&str; N]) -> Command {
+    let mut command = Command::cargo_bin("nit").unwrap();
+    command.args(args).current_dir(dir);
+    hermetic_git_env(&mut command);
+    command
+}
+
+fn hermetic_git_env(command: &mut Command) {
+    command
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .env("GIT_AUTHOR_NAME", "Nit Test")
+        .env("GIT_AUTHOR_EMAIL", "nit-test@example.com")
+        .env("GIT_COMMITTER_NAME", "Nit Test")
+        .env("GIT_COMMITTER_EMAIL", "nit-test@example.com");
 }
 
 fn parse_created_change(assert: &assert_cmd::assert::Assert) -> String {
@@ -2117,4 +2720,20 @@ fn parse_created_change(assert: &assert_cmd::assert::Assert) -> String {
         .find_map(|line| line.strip_prefix("created Change "))
         .map(ToOwned::to_owned)
         .unwrap_or_else(|| panic!("missing created Change line in {stdout}"))
+}
+
+fn call_is(call: &[String], first: &str, second: &str) -> bool {
+    call.first().is_some_and(|arg| arg == first) && call.get(1).is_some_and(|arg| arg == second)
+}
+
+fn assert_nit_guidance(text: &str) {
+    assert!(text.contains("<!-- nit:workspace:start -->"), "{text}");
+    assert!(text.contains("Nit workspace"), "{text}");
+    assert!(text.contains("nit --help"), "{text}");
+    assert!(text.contains("<!-- nit:workspace:end -->"), "{text}");
+    assert_eq!(nit_guidance_count(text), 1, "{text}");
+}
+
+fn nit_guidance_count(text: &str) -> usize {
+    text.matches("<!-- nit:workspace:start -->").count()
 }
