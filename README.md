@@ -49,6 +49,15 @@ The default install mode is `--link`, which points each harness at Nit's managed
 skill source under the Nit data directory. Use `--copy` for standalone snapshots.
 Supported harnesses are Claude Code, Codex, OpenCode, and Grok Build.
 
+Beyond the installable skill, `nit init` drops a short, version-stable workspace
+note into the repo's agent-instruction docs — `AGENTS.md`, plus `CLAUDE.md` when
+that file already exists — so any agent reading the file it scans first learns to
+drive cross-repo work with the `nit` CLI and skill instead of hand-managing repos
+with raw Git. The note lives between `<!-- nit:workspace:start -->` and
+`<!-- nit:workspace:end -->` markers, so re-running never duplicates it and any
+edits you make inside survive. `nit doctor` reports `agent guidance: ok` when the
+block is present and re-adds it when it is missing.
+
 ## Quickstart
 
 ```sh
@@ -126,7 +135,10 @@ push to `master` that touches `site/**` or the workflow. The build sets
 ```text
 src/                Rust CLI implementation.
 tests/              CLI integration tests.
-skills/             Bundled agent skills embedded into the binary.
+skills/
+  nit/              Bundled agent skill, embedded into the binary.
+  nit-release/      Maintainer release runbook skill (dev-only; not shipped).
+.claude/skills/     Project skills for Claude Code (e.g. nit-release).
 install.sh          Release installer (used by `nit update`).
 docs/
   decisions/        Locked product and design decisions.
