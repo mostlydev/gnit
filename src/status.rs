@@ -83,20 +83,18 @@ fn repo_line(repo_root: &Path, id: &str, is_root: bool, pin: Option<&Pin>) -> St
         format!("on {branch}")
     };
 
-    let work = match git::output_in(repo_root, ["status", "--porcelain"]) {
+    let work = match git::output_in_args(repo_root, ["status", "--porcelain=v2", "-z"]) {
         Ok(porcelain) => {
-            // The root tracks `.gnit/` metadata; exclude it so the line reflects
-            // the root's *code* state, matching what `gnit add -A`/`gnit commit` do.
-            let text = if is_root {
-                porcelain
-                    .lines()
-                    .filter(|line| !is_gnit_entry(line))
-                    .map(|line| format!("{line}\n"))
-                    .collect::<String>()
+            let entries = status_entries(&porcelain);
+            // The root tracks `.gnit/` metadata; exclude entries that are wholly
+            // metadata so the line reflects the root's code state. Mixed-path
+            // renames/copies still count because they move content across the
+            // metadata boundary.
+            if is_root {
+                describe_worktree(entries.iter().filter(|entry| !entry.is_gnit_only()))
             } else {
-                porcelain
-            };
-            describe_worktree(&text)
+                describe_worktree(entries.iter())
+            }
         }
         Err(_) => "status unavailable".to_string(),
     };
@@ -112,30 +110,99 @@ fn repo_line(repo_root: &Path, id: &str, is_root: bool, pin: Option<&Pin>) -> St
     format!("{work}   {on}{drift}")
 }
 
-/// True for a `git status --porcelain` line whose path is the Gnit metadata dir.
-fn is_gnit_entry(porcelain_line: &str) -> bool {
-    porcelain_line
-        .get(3..)
-        .map(|path| path == ".gnit" || path.starts_with(".gnit/"))
-        .unwrap_or(false)
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct StatusEntry {
+    x: char,
+    y: char,
+    paths: Vec<String>,
 }
 
-fn describe_worktree(porcelain: &str) -> String {
-    let (mut staged, mut modified, mut untracked) = (0u32, 0u32, 0u32);
-    for line in porcelain.lines() {
-        if line.len() < 2 {
+impl StatusEntry {
+    fn is_gnit_only(&self) -> bool {
+        !self.paths.is_empty() && self.paths.iter().all(|path| is_gnit_path(path))
+    }
+}
+
+fn is_gnit_path(path: &str) -> bool {
+    path == ".gnit" || path.starts_with(".gnit/")
+}
+
+fn status_entries(porcelain: &str) -> Vec<StatusEntry> {
+    let mut entries = Vec::new();
+    let mut fields = porcelain.split('\0').filter(|field| !field.is_empty());
+    while let Some(record) = fields.next() {
+        if let Some(path) = record.strip_prefix("? ") {
+            entries.push(StatusEntry {
+                x: '?',
+                y: '?',
+                paths: vec![path.to_string()],
+            });
             continue;
         }
-        let bytes = line.as_bytes();
-        let (x, y) = (bytes[0] as char, bytes[1] as char);
-        if x == '?' && y == '?' {
+        if let Some(path) = record.strip_prefix("! ") {
+            entries.push(StatusEntry {
+                x: '!',
+                y: '!',
+                paths: vec![path.to_string()],
+            });
+            continue;
+        }
+        if let Some(rest) = record.strip_prefix("1 ") {
+            let parts = rest.splitn(8, ' ').collect::<Vec<_>>();
+            if parts.len() == 8 {
+                entries.push(StatusEntry {
+                    x: status_char(parts[0], 0),
+                    y: status_char(parts[0], 1),
+                    paths: vec![parts[7].to_string()],
+                });
+            }
+            continue;
+        }
+        if let Some(rest) = record.strip_prefix("2 ") {
+            let parts = rest.splitn(9, ' ').collect::<Vec<_>>();
+            if parts.len() == 9 {
+                let original_path = fields.next().unwrap_or_default();
+                entries.push(StatusEntry {
+                    x: status_char(parts[0], 0),
+                    y: status_char(parts[0], 1),
+                    paths: vec![parts[8].to_string(), original_path.to_string()],
+                });
+            }
+            continue;
+        }
+        if let Some(rest) = record.strip_prefix("u ") {
+            let parts = rest.splitn(10, ' ').collect::<Vec<_>>();
+            if parts.len() == 10 {
+                entries.push(StatusEntry {
+                    x: status_char(parts[0], 0),
+                    y: status_char(parts[0], 1),
+                    paths: vec![parts[9].to_string()],
+                });
+            }
+        }
+    }
+    entries
+}
+
+fn status_char(xy: &str, index: usize) -> char {
+    xy.chars().nth(index).unwrap_or('.')
+}
+
+fn is_changed_status(status: char) -> bool {
+    !matches!(status, '.' | ' ' | '?' | '!')
+}
+
+fn describe_worktree<'a>(entries: impl IntoIterator<Item = &'a StatusEntry>) -> String {
+    let (mut staged, mut modified, mut untracked) = (0u32, 0u32, 0u32);
+    for entry in entries {
+        if entry.x == '?' && entry.y == '?' {
             untracked += 1;
             continue;
         }
-        if x != ' ' && x != '?' {
+        if is_changed_status(entry.x) {
             staged += 1;
         }
-        if y != ' ' && y != '?' {
+        if is_changed_status(entry.y) {
             modified += 1;
         }
     }
@@ -227,5 +294,28 @@ fn walk(
             continue;
         }
         walk(root, &path, members, ignored, depth + 1, found);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn status_v2_z_copy_across_gnit_boundary_counts_as_root_work() {
+        let porcelain = concat!(
+            "2 C. N... 100644 100644 100644 abc abc C100 .gnit/copied.txt\0",
+            "src.txt\0",
+            "? .gnit/local-noise.txt\0"
+        );
+        let entries = status_entries(porcelain);
+
+        assert_eq!(entries.len(), 2);
+        assert!(!entries[0].is_gnit_only());
+        assert!(entries[1].is_gnit_only());
+        assert_eq!(
+            describe_worktree(entries.iter().filter(|entry| !entry.is_gnit_only())),
+            "1 staged"
+        );
     }
 }

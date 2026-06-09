@@ -2227,6 +2227,52 @@ fn status_includes_dirty_root_repo() {
     );
 }
 
+#[test]
+fn status_hides_pure_root_gnit_metadata_changes() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    fs::write(ws.join(".gnit/local-noise.txt"), "metadata only\n").unwrap();
+
+    let output = gnit_output(ws, ["status"]);
+    let root_line = output
+        .lines()
+        .find(|line| line.trim_start().starts_with("root"))
+        .unwrap_or_else(|| panic!("missing root repo status line:\n{output}"));
+    assert!(
+        root_line.contains("clean"),
+        "pure .gnit metadata noise should be hidden from root status:\n{output}"
+    );
+}
+
+#[test]
+fn status_counts_renames_across_gnit_metadata_boundary() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+
+    fs::write(ws.join(".gnit/meta-fixture.txt"), "metadata tracked\n").unwrap();
+    fs::write(ws.join("root-fixture.txt"), "root tracked\n").unwrap();
+    git(ws, ["add", ".gnit/meta-fixture.txt", "root-fixture.txt"]);
+    git(ws, ["commit", "-m", "Add rename fixtures"]);
+
+    git(ws, ["mv", ".gnit/meta-fixture.txt", "visible-meta.txt"]);
+    git(ws, ["mv", "root-fixture.txt", ".gnit/root-fixture.txt"]);
+    fs::write(ws.join(".gnit/local-noise.txt"), "metadata only\n").unwrap();
+
+    let output = gnit_output(ws, ["status"]);
+    let root_line = output
+        .lines()
+        .find(|line| line.trim_start().starts_with("root"))
+        .unwrap_or_else(|| panic!("missing root repo status line:\n{output}"));
+    assert!(
+        root_line.contains("2 staged"),
+        "renames into and out of .gnit should count, while pure .gnit noise stays hidden:\n{output}"
+    );
+    assert!(
+        !root_line.contains("untracked"),
+        "untracked pure .gnit metadata should stay hidden:\n{output}"
+    );
+}
+
 // ---- Error-contract sweep ---------------------------------------------------
 // Deterministic, no-network coverage of the CLI's `bail!` surface: argument
 // validation, "outside a workspace", and unknown-id handling. These guard the
