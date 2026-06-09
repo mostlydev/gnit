@@ -41,7 +41,11 @@ pub fn review(target: String) -> Result<()> {
             &member_root,
             ["cat-file", "-e", &format!("{}^{{commit}}", member.commit)],
         )? {
-            println!("commit not available locally");
+            println!(
+                "commit not available locally; run `nit checkout {}` or `git -C {} fetch origin`",
+                pin.id,
+                member_root.display()
+            );
             continue;
         }
         let summary = git::output_in_args(

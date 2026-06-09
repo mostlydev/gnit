@@ -751,6 +751,48 @@ fn commit_change_and_land_workflow_records_shared_history() {
 }
 
 #[test]
+fn review_pin_missing_local_commit_prints_actionable_remediation_without_fetching() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+    let sdk = workspace.join("vendor/sdk");
+
+    advance_remote(
+        fixture._temp.path(),
+        &fixture.sdk_remote,
+        "sdk-review-remote",
+        "lib.rs",
+        "pub fn sdk() -> &'static str { \"remote only\" }\n",
+    );
+    let remote_commit = git_dir_out(&fixture.sdk_remote, ["rev-parse", "master"])
+        .trim()
+        .to_string();
+    assert_commit_absent(&sdk, &remote_commit);
+
+    let pin_id = "PIN-review-remote-only";
+    fs::create_dir_all(workspace.join(".nit/pins")).unwrap();
+    fs::write(
+        workspace.join(format!(".nit/pins/{pin_id}.yaml")),
+        format!(
+            "version: 1\nid: {pin_id}\nlabel: review-remote-only\nmembers:\n- id: sdk\n  path: vendor/sdk\n  commit: {remote_commit}\n  branch_hint: master\nprovenance:\n  changes: []\n"
+        ),
+    )
+    .unwrap();
+
+    nit(workspace, ["review", "review-remote-only"])
+        .success()
+        .stdout(predicate::str::contains("== sdk (vendor/sdk) =="))
+        .stdout(predicate::str::contains(format!("commit {remote_commit}")))
+        .stdout(predicate::str::contains("commit not available locally"))
+        .stdout(predicate::str::contains(
+            "nit checkout PIN-review-remote-only",
+        ))
+        .stdout(predicate::str::contains("git -C "))
+        .stdout(predicate::str::contains("vendor/sdk fetch origin"));
+
+    assert_commit_absent(&sdk, &remote_commit);
+}
+
+#[test]
 fn commit_respects_index_and_leaves_unstaged_tracked_changes() {
     let fixture = clean_workspace_with_sdk();
     let workspace = fixture.root.as_path();
@@ -2399,6 +2441,18 @@ fn git_dir_out<const N: usize>(git_dir: &Path, args: [&str; N]) -> String {
         String::from_utf8_lossy(&output.stderr)
     );
     String::from_utf8_lossy(&output.stdout).to_string()
+}
+
+fn assert_commit_absent(repo: &Path, commit: &str) {
+    let output = git_command(repo)
+        .args(["cat-file", "-e", &format!("{commit}^{{commit}}")])
+        .output()
+        .unwrap();
+    assert!(
+        !output.status.success(),
+        "commit {commit} should not be present in {}",
+        repo.display()
+    );
 }
 
 fn git_command(dir: &Path) -> std::process::Command {
