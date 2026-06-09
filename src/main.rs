@@ -13,6 +13,7 @@ mod push;
 mod review;
 mod skills;
 mod status;
+mod trailers;
 mod update;
 mod upkeep;
 mod workspace;

@@ -8,9 +8,9 @@ use crate::git;
 use crate::ids;
 use crate::metadata::Roster;
 use crate::pin;
+use crate::trailers;
+use crate::trailers::TRAILER;
 use crate::workspace;
-
-const TRAILER: &str = "Gnit-Change-Id";
 
 #[derive(Debug, Clone)]
 pub struct ChangeCommit {
@@ -239,7 +239,7 @@ fn scan_change_commits(repos: &[Repo]) -> Result<Vec<(ChangeCommit, String)>> {
                 continue;
             };
             let Some(body) = fields.next() else { continue };
-            let Some(change_id) = trailer_value(body) else {
+            let Some(change_id) = trailers::change_id(body) else {
                 continue;
             };
             commits.push((
@@ -255,14 +255,6 @@ fn scan_change_commits(repos: &[Repo]) -> Result<Vec<(ChangeCommit, String)>> {
         }
     }
     Ok(commits)
-}
-
-fn trailer_value(body: &str) -> Option<String> {
-    body.lines()
-        .find_map(|line| line.trim().strip_prefix("Gnit-Change-Id: "))
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
 }
 
 fn workspace_repos(root: &Path, roster: &Roster) -> Vec<Repo> {

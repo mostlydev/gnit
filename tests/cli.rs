@@ -2178,6 +2178,47 @@ fn log_orders_equal_timestamp_entries_by_stable_secondary_key() {
 }
 
 #[test]
+fn change_discovery_parses_real_trailers_not_substrings() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    let sdk = ws.join("vendor/sdk");
+
+    // A trailer-shaped line in a middle paragraph is prose, not membership.
+    fs::write(sdk.join("lib.rs"), "pub fn sdk() { /* prose */ }\n").unwrap();
+    git(&sdk, ["add", "lib.rs"]);
+    git(
+        &sdk,
+        [
+            "commit",
+            "-m",
+            "Mention a change\n\nGnit-Change-Id: GCH-1760000000000-dead\n\nDiscussed above, not a trailer block.",
+        ],
+    );
+
+    // The no-space trailer spelling is a valid git trailer and must count.
+    fs::write(sdk.join("lib.rs"), "pub fn sdk() { /* nospace */ }\n").unwrap();
+    git(&sdk, ["add", "lib.rs"]);
+    git(
+        &sdk,
+        [
+            "commit",
+            "-m",
+            "Tight trailer\n\nGnit-Change-Id:GCH-1760000000001-beef",
+        ],
+    );
+
+    let output = gnit_output(ws, ["change", "log"]);
+    assert!(
+        !output.contains("GCH-1760000000000-dead"),
+        "mid-paragraph mention must not register as membership:\n{output}"
+    );
+    assert!(
+        output.contains("GCH-1760000000001-beef"),
+        "no-space trailer spelling must register:\n{output}"
+    );
+}
+
+#[test]
 fn upkeep_restores_missing_local_exclude() {
     let fixture = clean_workspace_with_sdk();
     let ws = fixture.root.as_path();

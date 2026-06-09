@@ -6,9 +6,8 @@ use anyhow::{Context, Result};
 
 use crate::git;
 use crate::metadata::{Pin, Roster, PINS_DIR};
+use crate::trailers;
 use crate::workspace;
-
-const TRAILER: &str = "Gnit-Change-Id";
 
 /// Unified, interleaved workspace timeline of Changes and Pins, newest first.
 /// Changes are reconstructed from `Gnit-Change-Id` trailers across member repos;
@@ -58,7 +57,7 @@ pub fn workspace_log() -> Result<()> {
             else {
                 continue;
             };
-            let Some(change_id) = trailer_value(body) else {
+            let Some(change_id) = trailers::change_id(body) else {
                 continue;
             };
             let time: i64 = ct.trim().parse().unwrap_or(0);
@@ -145,13 +144,6 @@ fn pin_time(pin: &Pin) -> i64 {
         .and_then(|millis| millis.parse::<i64>().ok())
         .map(|millis| millis / 1000)
         .unwrap_or(0)
-}
-
-fn trailer_value(body: &str) -> Option<String> {
-    body.lines()
-        .rev()
-        .find_map(|line| line.strip_prefix(&format!("{TRAILER}: ")))
-        .map(|value| value.trim().to_string())
 }
 
 fn plural(n: usize) -> &'static str {

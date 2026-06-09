@@ -10,9 +10,10 @@ use serde_json::Value;
 use crate::cli::{PrOpenArgs, PrStatusArgs};
 use crate::git;
 use crate::metadata::{Pin, Roster};
+use crate::trailers;
+use crate::trailers::TRAILER;
 use crate::workspace;
 
-const TRAILER: &str = "Gnit-Change-Id";
 const MARKER_START: &str = "<!-- gnit-pr-sync:start -->";
 const MARKER_END: &str = "<!-- gnit-pr-sync:end -->";
 const MIN_GH_VERSION: (u64, u64, u64) = (2, 0, 0);
@@ -519,7 +520,7 @@ fn commits_ahead_of_base(repo: &Path, base: &str) -> Result<Vec<(String, LocalCo
             continue;
         };
         let Some(body) = fields.next() else { continue };
-        let Some(change) = trailer_value(body) else {
+        let Some(change) = trailers::change_id(body) else {
             continue;
         };
         commits.push((
@@ -1102,14 +1103,6 @@ where
         );
     }
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
-}
-
-fn trailer_value(body: &str) -> Option<String> {
-    body.lines()
-        .find_map(|line| line.trim().strip_prefix("Gnit-Change-Id: "))
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
 }
 
 fn normalize_state(state: &str) -> String {
