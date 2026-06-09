@@ -2221,6 +2221,79 @@ fn change_discovery_parses_real_trailers_not_substrings() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn commit_partial_failure_is_resumable_with_same_change_id() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    let sdk = ws.join("vendor/sdk");
+
+    // A failing pre-commit hook in the member interrupts the workspace commit
+    // after the root has already committed with the freshly minted id.
+    let hook = sdk.join(".git/hooks/pre-commit");
+    fs::write(&hook, "#!/bin/sh\nexit 1\n").unwrap();
+    let mut perms = fs::metadata(&hook).unwrap().permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(&hook, perms).unwrap();
+
+    fs::write(ws.join("README.md"), "root v2\n").unwrap();
+    fs::write(sdk.join("lib.rs"), "pub fn sdk() { /* v2 */ }\n").unwrap();
+    gnit(ws, ["add", "README.md", "vendor/sdk/lib.rs"]);
+
+    let assert = gnit(ws, ["commit", "-m", "Cross-repo update"]).failure();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+    let change_id = stderr
+        .split("gnit commit --change ")
+        .nth(1)
+        .and_then(|rest| rest.split_whitespace().next())
+        .unwrap_or_else(|| panic!("partial-failure error must name the resume command:\n{stderr}"))
+        .to_string();
+
+    let root_body = git_out(ws, ["log", "-1", "--pretty=%B"]);
+    assert!(
+        root_body.contains(&format!("Gnit-Change-Id: {change_id}")),
+        "root should already carry the partial change:\n{root_body}"
+    );
+
+    // Re-running plain `gnit commit` would mint a second id; resuming with
+    // --change reunifies the change under the original one.
+    fs::remove_file(&hook).unwrap();
+    gnit(
+        ws,
+        ["commit", "--change", &change_id, "-m", "Cross-repo update"],
+    )
+    .success();
+
+    let sdk_body = git_out(&sdk, ["log", "-1", "--pretty=%B"]);
+    assert!(
+        sdk_body.contains(&format!("Gnit-Change-Id: {change_id}")),
+        "member resume must reuse the original change id:\n{sdk_body}"
+    );
+    gnit(ws, ["change", "status", &change_id])
+        .success()
+        .stdout(predicate::str::contains("root:"))
+        .stdout(predicate::str::contains("sdk:"));
+}
+
+#[test]
+fn commit_change_resume_rejects_unknown_or_malformed_ids() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+
+    fs::write(ws.join("README.md"), "root v2\n").unwrap();
+    gnit(ws, ["add", "README.md"]);
+
+    gnit(
+        ws,
+        ["commit", "--change", "GCH-1760000000000-72e5", "-m", "x"],
+    )
+    .failure()
+    .stderr(predicate::str::contains("not found"));
+    gnit(ws, ["commit", "--change", "not-a-change-id", "-m", "x"])
+        .failure()
+        .stderr(predicate::str::contains("not a valid change id"));
+}
+
 #[test]
 fn upkeep_restores_missing_local_exclude() {
     let fixture = clean_workspace_with_sdk();

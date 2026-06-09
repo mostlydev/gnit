@@ -48,7 +48,7 @@ pub fn change_id(message: &str) -> Option<String> {
 
 /// Strict validation of the id shape minted by `ids::change_id`:
 /// `GCH-<millis>-<pid hex>` with an optional `-<counter hex>` suffix.
-fn is_valid_change_id(value: &str) -> bool {
+pub fn is_valid_change_id(value: &str) -> bool {
     let Some(rest) = value.strip_prefix("GCH-") else {
         return false;
     };

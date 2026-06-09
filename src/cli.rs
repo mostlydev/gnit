@@ -46,6 +46,9 @@ pub enum Commands {
         /// Commit message.
         #[arg(short, long)]
         message: String,
+        /// Finish an interrupted commit using this existing Change id.
+        #[arg(long)]
+        change: Option<String>,
     },
     /// Commit staged changes and create a Pin.
     Land {

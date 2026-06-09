@@ -87,18 +87,18 @@ pub fn add(paths: Vec<PathBuf>, all: bool, repo: Option<String>) -> Result<()> {
     Ok(())
 }
 
-pub fn commit(message: String) -> Result<String> {
+pub fn commit(message: String, change: Option<String>) -> Result<String> {
     let cwd = env::current_dir()?;
     let root = workspace::find_gnit_workspace(&cwd)
         .context("not in a Gnit workspace; run `gnit init` first")?;
-    commit_staged(&root, &message)
+    commit_staged(&root, &message, change.as_deref())
 }
 
 pub fn land(message: String, name: Option<String>) -> Result<()> {
     let cwd = env::current_dir()?;
     let root = workspace::find_gnit_workspace(&cwd)
         .context("not in a Gnit workspace; run `gnit init` first")?;
-    let change_id = commit_staged(&root, &message)?;
+    let change_id = commit_staged(&root, &message, None)?;
     pin::create_with_changes(name, vec![change_id.clone()], false)?;
     println!("landed Change {change_id}");
     Ok(())
@@ -178,30 +178,65 @@ pub fn ensure_exists(id: &str) -> Result<()> {
     commits_for_change(id).map(|_| ())
 }
 
-fn commit_staged(root: &Path, message: &str) -> Result<String> {
+fn commit_staged(root: &Path, message: &str, resume_change: Option<&str>) -> Result<String> {
     let roster = Roster::read(root)?;
     let repos = workspace_repos(root, &roster);
-    let change_id = ids::change_id();
+    let change_id = match resume_change {
+        Some(id) => {
+            if !trailers::is_valid_change_id(id) {
+                bail!("{id} is not a valid change id");
+            }
+            let known = scan_change_commits(&repos)?
+                .into_iter()
+                .any(|(_, existing)| existing == id);
+            if !known {
+                bail!(
+                    "change {id} not found in this workspace; --change resumes an interrupted `gnit commit`"
+                );
+            }
+            id.to_string()
+        }
+        None => ids::change_id(),
+    };
     let full_message = format!("{message}\n\n{TRAILER}: {change_id}");
     let mut committed = Vec::new();
 
-    for repo in repos {
-        ensure_no_staged_workspace_metadata(&repo)?;
-        if !has_staged_changes(&repo)? {
+    for repo in &repos {
+        ensure_no_staged_workspace_metadata(repo)?;
+        if !has_staged_changes(repo)? {
             continue;
         }
-        git::output_in(&repo.root, ["commit", "-m", &full_message])?;
+        if let Err(error) = git::output_in(&repo.root, ["commit", "-m", &full_message]) {
+            if committed.is_empty() {
+                return Err(error).with_context(|| format!("commit failed in {}", repo.id));
+            }
+            let done = committed
+                .iter()
+                .map(|(repo, commit): &(String, String)| format!("{repo} {}", short(commit)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Err(error).with_context(|| {
+                format!(
+                    "commit failed in {}; Change {change_id} is partially applied (committed: {done}); fix the failure, then finish it with `gnit commit --change {change_id} -m <same message>`",
+                    repo.id
+                )
+            });
+        }
         let commit = git::output_in(&repo.root, ["rev-parse", "HEAD"])?
             .trim()
             .to_string();
-        committed.push((repo.id, commit));
+        committed.push((repo.id.clone(), commit));
     }
 
     if committed.is_empty() {
         bail!("no staged changes to commit");
     }
 
-    println!("created Change {change_id}");
+    if resume_change.is_some() {
+        println!("completed Change {change_id}");
+    } else {
+        println!("created Change {change_id}");
+    }
     for (repo, commit) in committed {
         println!("  {repo}: {}", short(&commit));
     }

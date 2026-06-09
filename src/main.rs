@@ -39,7 +39,7 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Clone { url, path, pin } => clone::clone_workspace(url, path, pin),
         Commands::Add { paths, all, repo } => change::add(paths, all, repo),
-        Commands::Commit { message } => change::commit(message).map(|_| ()),
+        Commands::Commit { message, change } => change::commit(message, change).map(|_| ()),
         Commands::Land { name, message } => change::land(message, name),
         Commands::Checkout { pin, exact } => checkout::checkout(pin, exact),
         Commands::Init {
