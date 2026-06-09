@@ -41,8 +41,8 @@ retry spelling for the same policy, not a second push mode.
 
 - A failed push can be retried with either `nit push` or `nit push --resume`.
 - A partial landing is visible instead of hidden behind the first Git error.
-- Nit does not publish a Pin that points at an unpushed or rewritten-away member
-  commit.
+- Nit does not publish a Pin that points at a current member commit unreachable
+  from local `HEAD` or `origin/*`.
 - Retained historical Pins for retired members do not block today's root push.
 - Humans have one push policy to learn.
 

@@ -80,6 +80,10 @@ duplicating them, so it doubles as the recovery command after a network blip.
 nit review <change-id-or-pin>
 ```
 
+`nit review` is local-only. If a pinned member commit is not available in the
+current clone, it names the member and prints the `nit checkout` or `git fetch`
+command that will hydrate it.
+
 ## Reconstruct A Workspace
 
 ```sh

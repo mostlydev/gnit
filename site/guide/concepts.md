@@ -26,5 +26,7 @@ hiding the state.
 
 ## Review
 
-`nit review <change|pin>` produces a combined cross-repo review artifact.
-
+`nit review <change|pin>` produces a combined cross-repo review artifact. It is
+local-only by default: when a pinned member commit is not available locally, Nit
+prints an explicit `nit checkout <pin>` or member `git fetch origin` remediation
+instead of fetching automatically.

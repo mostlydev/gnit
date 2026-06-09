@@ -61,7 +61,8 @@ nit clone <url> dir --pin <label>   # rebuild a workspace and materialize a Pin
   workspace metadata under `.nit/`.
 - **Push is ordered and safe to retry.** `nit push` publishes members in roster
   order, then the workspace root/control repo last, and holds the root back if
-  any member fails or if a Pin references a member commit that is not yet pushed.
+  any member fails or if a Pin references a member commit that is not reachable
+  from local member `HEAD` or an `origin/*` remote-tracking ref.
   After fixing the member, run `nit push` again, or `nit push --resume` as the
   explicit retry spelling. Nit never force-pushes; a non-fast-forward is a hard
   failure to resolve in the member, not to override.

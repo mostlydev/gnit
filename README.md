@@ -86,7 +86,9 @@ nit skills install --all # teach installed agents the Nit workflow
 
 `nit push` reports every target and is safe to retry. If a member fails, Nit
 holds the workspace metadata back; after fixing the member, run `nit push` again
-or `nit push --resume` for the explicit retry spelling.
+or `nit push --resume` for the explicit retry spelling. It also holds metadata
+back if a Pin references a current member commit that is not reachable from the
+member's local `HEAD` or an `origin/*` remote-tracking ref.
 
 `nit pr` is read-only status for the current workspace Change. `nit pr open`
 creates missing draft GitHub PRs, adopts existing same-branch PRs, and refreshes

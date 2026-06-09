@@ -83,9 +83,11 @@ Nit commits its own metadata separately and tells you to unstage it if you try.
 `nit push` publishes members first and the workspace root/control repo last. It
 prints a report for every target: pushed, already landed, failed, not attempted,
 or held back. If a member fails, the root stays unpublished so Pins do not point
-at missing member commits. Retry with `nit push` or `nit push --resume`; both use
-the same strict ordered policy, and `--resume` is just the explicit retry
-spelling.
+at missing member commits. Root metadata is also held back when a current
+member's pinned commit is not reachable from local member `HEAD` or an
+`origin/*` remote-tracking ref. Retry with `nit push` or `nit push --resume`;
+both use the same strict ordered policy, and `--resume` is just the explicit
+retry spelling.
 
 `nit pr` shows the linked GitHub PR projection for the current Change. It is
 read-only and degrades when GitHub is unavailable by keeping local branch/change
