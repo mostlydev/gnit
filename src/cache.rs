@@ -41,11 +41,11 @@ struct CacheFile {
 /// ref-keyed cache when fresh, rescanned (and re-cached) when stale.
 pub fn change_commits(
     workspace_root: &Path,
-    repo_id: &str,
+    cache_key: &str,
     repo_root: &Path,
 ) -> Result<Vec<CachedCommit>> {
     let ref_state = ref_state(repo_root);
-    let path = cache_path(workspace_root, repo_id);
+    let path = cache_path(workspace_root, cache_key);
 
     if let Some(cached) = read_cache(&path, &ref_state) {
         return Ok(cached);
@@ -61,27 +61,38 @@ pub fn change_commits(
 fn ref_state(repo_root: &Path) -> String {
     let refs = git::output_in_args(
         repo_root,
-        ["for-each-ref", "--format=%(refname) %(objectname)"],
+        [
+            "for-each-ref",
+            "--sort=refname",
+            "--format=%(refname) %(objectname)",
+        ],
     )
     .unwrap_or_default();
     let head = git::output_in(repo_root, ["rev-parse", "HEAD"]).unwrap_or_default();
     format!("{}\nHEAD {}", refs.trim_end(), head.trim())
 }
 
-fn cache_path(workspace_root: &Path, repo_id: &str) -> PathBuf {
-    let safe_id: String = repo_id
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
-                ch
-            } else {
-                '-'
-            }
-        })
-        .collect();
+fn cache_path(workspace_root: &Path, cache_key: &str) -> PathBuf {
+    let safe_id = encode_cache_key(cache_key);
     workspace_root
         .join(CACHE_DIR)
         .join(format!("changes-{safe_id}.json"))
+}
+
+fn encode_cache_key(cache_key: &str) -> String {
+    let mut encoded = String::new();
+    for byte in cache_key.bytes() {
+        if byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_' {
+            encoded.push(byte as char);
+        } else {
+            encoded.push_str(&format!("~{byte:02x}"));
+        }
+    }
+    if encoded.is_empty() {
+        "~empty".to_string()
+    } else {
+        encoded
+    }
 }
 
 fn read_cache(path: &Path, ref_state: &str) -> Option<Vec<CachedCommit>> {
@@ -140,4 +151,25 @@ fn scan(repo_root: &Path) -> Vec<CachedCommit> {
         });
     }
     commits
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::cache_path;
+
+    #[test]
+    fn cache_paths_do_not_collide_for_similar_repo_ids() {
+        let root = Path::new("/workspace");
+        assert_ne!(
+            cache_path(root, "member:sdk.one"),
+            cache_path(root, "member:sdk-one")
+        );
+        assert_ne!(
+            cache_path(root, "member:sdk/one"),
+            cache_path(root, "member:sdk~2fone")
+        );
+        assert_ne!(cache_path(root, "root"), cache_path(root, "member:root"));
+    }
 }

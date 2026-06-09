@@ -262,7 +262,7 @@ fn commits_for_change(id: &str) -> Result<Vec<ChangeCommit>> {
 fn scan_change_commits(root: &Path, repos: &[Repo]) -> Result<Vec<(ChangeCommit, String)>> {
     let mut commits = Vec::new();
     for repo in repos {
-        for cached in cache::change_commits(root, &repo.id, &repo.root)? {
+        for cached in cache::change_commits(root, &repo.cache_key(), &repo.root)? {
             commits.push((
                 ChangeCommit {
                     repo_id: repo.id.clone(),
@@ -276,6 +276,16 @@ fn scan_change_commits(root: &Path, repos: &[Repo]) -> Result<Vec<(ChangeCommit,
         }
     }
     Ok(commits)
+}
+
+impl Repo {
+    fn cache_key(&self) -> String {
+        if self.is_workspace_root {
+            "root".to_string()
+        } else {
+            format!("member:{}", self.id)
+        }
+    }
 }
 
 fn workspace_repos(root: &Path, roster: &Roster) -> Vec<Repo> {

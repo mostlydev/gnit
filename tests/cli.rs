@@ -901,7 +901,7 @@ fn change_discovery_uses_and_invalidates_ref_keyed_cache() {
 
     let warm = gnit_output(ws, ["change", "log"]);
     assert!(warm.contains(&change_id), "{warm}");
-    let cache_path = ws.join(".gnit/cache/changes-sdk.json");
+    let cache_path = ws.join(".gnit/cache/changes-member~3asdk.json");
     assert!(
         cache_path.exists(),
         "discovery should persist a per-member cache"
@@ -941,7 +941,7 @@ fn corrupt_discovery_cache_falls_back_to_scan() {
     let commit = gnit(ws, ["commit", "-m", "Survives corruption"]).success();
     let change_id = parse_created_change(&commit);
 
-    let cache_path = ws.join(".gnit/cache/changes-sdk.json");
+    let cache_path = ws.join(".gnit/cache/changes-member~3asdk.json");
     gnit_output(ws, ["change", "log"]);
     fs::write(&cache_path, "{ not json").unwrap();
 

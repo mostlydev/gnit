@@ -476,7 +476,17 @@ fn commit_metadata_with_paths(root: &Path, message: &str, extra_paths: &[PathBuf
 fn stage_metadata_paths(root: &Path, extra_paths: &[PathBuf]) -> Result<()> {
     let tracked_metadata = git::output_in(root, ["ls-files", ".gnit"])?;
     if !tracked_metadata.trim().is_empty() {
-        git::output_in(root, ["add", "-u", "--", ".gnit"])?;
+        git::output_in_args(
+            root,
+            [
+                "add",
+                "-u",
+                "--",
+                ".gnit",
+                ":(exclude).gnit/lock",
+                ":(exclude).gnit/cache",
+            ],
+        )?;
     }
 
     let mut add_paths = existing_metadata_files(root)?;

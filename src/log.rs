@@ -32,25 +32,39 @@ pub fn workspace_log() -> Result<()> {
     }
     let mut changes: HashMap<String, Change> = HashMap::new();
 
-    let mut repos: Vec<(String, std::path::PathBuf)> = Vec::new();
-    if git::is_git_repo_root(&root) {
-        repos.push(("root".to_string(), root.clone()));
-    }
-    for member in &roster.members {
-        repos.push((member.id.clone(), root.join(&member.path)));
+    struct Repo {
+        id: String,
+        cache_key: String,
+        root: std::path::PathBuf,
     }
 
-    for (repo_id, repo_root) in &repos {
-        if !git::is_git_repo_root(repo_root) {
+    let mut repos: Vec<Repo> = Vec::new();
+    if git::is_git_repo_root(&root) {
+        repos.push(Repo {
+            id: "root".to_string(),
+            cache_key: "root".to_string(),
+            root: root.clone(),
+        });
+    }
+    for member in &roster.members {
+        repos.push(Repo {
+            id: member.id.clone(),
+            cache_key: format!("member:{}", member.id),
+            root: root.join(&member.path),
+        });
+    }
+
+    for repo in &repos {
+        if !git::is_git_repo_root(&repo.root) {
             continue;
         }
-        for cached in cache::change_commits(&root, repo_id, repo_root)? {
+        for cached in cache::change_commits(&root, &repo.cache_key, &repo.root)? {
             let entry = changes.entry(cached.change_id).or_insert(Change {
                 time: 0,
                 subject: String::new(),
                 repos: BTreeSet::new(),
             });
-            entry.repos.insert(repo_id.clone());
+            entry.repos.insert(repo.id.clone());
             if cached.time >= entry.time {
                 entry.time = cached.time;
                 entry.subject = cached.subject;
