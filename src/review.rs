@@ -1,14 +1,17 @@
 use std::env;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 
 use crate::change;
 use crate::git;
 use crate::metadata::Pin;
 use crate::workspace;
 
-pub fn review(target: String) -> Result<()> {
+pub fn review(target: String, fetch: bool) -> Result<()> {
     if target.starts_with("GCH-") {
+        if fetch {
+            bail!("--fetch is only supported when reviewing a Pin");
+        }
         return change::diff(target);
     }
 
@@ -37,10 +40,12 @@ pub fn review(target: String) -> Result<()> {
             println!("not available locally");
             continue;
         }
-        if !git::status_in_args(
-            &member_root,
-            ["cat-file", "-e", &format!("{}^{{commit}}", member.commit)],
-        )? {
+        if fetch && !commit_available(&member_root, &member.commit)? {
+            git::output_in(&member_root, ["fetch", "origin"])
+                .with_context(|| format!("fetch member {} from origin", member.id))?;
+        }
+
+        if !commit_available(&member_root, &member.commit)? {
             println!(
                 "commit not available locally; run `gnit checkout {}` or `git -C {} fetch origin`",
                 pin.id,
@@ -55,4 +60,11 @@ pub fn review(target: String) -> Result<()> {
         print!("{summary}");
     }
     Ok(())
+}
+
+fn commit_available(member_root: &std::path::Path, commit: &str) -> Result<bool> {
+    git::status_in_args(
+        member_root,
+        ["cat-file", "-e", &format!("{commit}^{{commit}}")],
+    )
 }

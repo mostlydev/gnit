@@ -87,7 +87,7 @@ fn main() -> Result<()> {
             Some(PrCommands::Open(open_args)) => pr::open(open_args),
             None => pr::status(args),
         },
-        Commands::Review { target } => review::review(target),
+        Commands::Review { target, fetch } => review::review(target, fetch),
         Commands::Update {
             check,
             dry_run,
@@ -137,8 +137,8 @@ fn command_requires_workspace_lock(command: &Commands) -> bool {
         | Commands::Log
         | Commands::Change { .. }
         | Commands::Pr { .. }
-        | Commands::Review { .. }
         | Commands::Update { .. }
         | Commands::Skills { .. } => false,
+        Commands::Review { fetch, .. } => *fetch,
     }
 }

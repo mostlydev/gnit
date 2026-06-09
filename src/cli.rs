@@ -143,6 +143,9 @@ pub enum Commands {
     },
     /// Render a combined review artifact for a Change or Pin.
     Review {
+        /// Fetch missing member commits before rendering a Pin review.
+        #[arg(long)]
+        fetch: bool,
         /// Change id or Pin id/label.
         target: String,
     },

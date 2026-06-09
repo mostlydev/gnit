@@ -794,6 +794,89 @@ fn review_pin_missing_local_commit_prints_actionable_remediation_without_fetchin
 }
 
 #[test]
+fn review_fetch_retrieves_missing_member_commit_before_rendering() {
+    let fixture = workspace_with_three_member_remotes();
+    let workspace = fixture.root.as_path();
+    let sdk = workspace.join("sdk");
+    let app = workspace.join("app");
+
+    advance_remote(
+        fixture._temp.path(),
+        &fixture.sdk_remote,
+        "sdk-review-fetch",
+        "sdk.txt",
+        "sdk v2\n",
+    );
+    let sdk_remote_commit = git_dir_out(&fixture.sdk_remote, ["rev-parse", "master"])
+        .trim()
+        .to_string();
+    let app_commit = git_out(&app, ["rev-parse", "HEAD"]).trim().to_string();
+    assert_commit_absent(&sdk, &sdk_remote_commit);
+
+    git(
+        &app,
+        [
+            "remote",
+            "set-url",
+            "origin",
+            "/definitely/missing/review-fetch-app.git",
+        ],
+    );
+
+    let pin_id = "PIN-review-fetch";
+    fs::create_dir_all(workspace.join(".gnit/pins")).unwrap();
+    fs::write(
+        workspace.join(format!(".gnit/pins/{pin_id}.yaml")),
+        format!(
+            "version: 1\nid: {pin_id}\nlabel: review-fetch\nmembers:\n- id: sdk\n  path: sdk\n  commit: {sdk_remote_commit}\n  branch_hint: master\n- id: app\n  path: app\n  commit: {app_commit}\n  branch_hint: master\nprovenance:\n  changes: []\n"
+        ),
+    )
+    .unwrap();
+
+    gnit(workspace, ["review", "--fetch", "review-fetch"])
+        .success()
+        .stdout(predicate::str::contains("== sdk (sdk) =="))
+        .stdout(predicate::str::contains(format!(
+            "commit {sdk_remote_commit}"
+        )))
+        .stdout(predicate::str::contains("Advance remote"))
+        .stdout(predicate::str::contains("== app (app) =="))
+        .stdout(predicate::str::contains(format!("commit {app_commit}")))
+        .stdout(predicate::str::contains("commit not available locally").not());
+
+    assert_commit_present(&sdk, &sdk_remote_commit);
+}
+
+#[test]
+fn review_fetch_keeps_clear_remediation_when_commit_stays_unavailable() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+    let sdk = workspace.join("vendor/sdk");
+    let missing_commit = "0123456789012345678901234567890123456789";
+    assert_commit_absent(&sdk, missing_commit);
+
+    let pin_id = "PIN-review-fetch-missing";
+    fs::create_dir_all(workspace.join(".gnit/pins")).unwrap();
+    fs::write(
+        workspace.join(format!(".gnit/pins/{pin_id}.yaml")),
+        format!(
+            "version: 1\nid: {pin_id}\nlabel: review-fetch-missing\nmembers:\n- id: sdk\n  path: vendor/sdk\n  commit: {missing_commit}\n  branch_hint: master\nprovenance:\n  changes: []\n"
+        ),
+    )
+    .unwrap();
+
+    gnit(workspace, ["review", "--fetch", "review-fetch-missing"])
+        .success()
+        .stdout(predicate::str::contains("== sdk (vendor/sdk) =="))
+        .stdout(predicate::str::contains(format!("commit {missing_commit}")))
+        .stdout(predicate::str::contains("commit not available locally"))
+        .stdout(predicate::str::contains("git -C "))
+        .stdout(predicate::str::contains("vendor/sdk fetch origin"));
+
+    assert_commit_absent(&sdk, missing_commit);
+}
+
+#[test]
 fn commit_respects_index_and_leaves_unstaged_tracked_changes() {
     let fixture = clean_workspace_with_sdk();
     let workspace = fixture.root.as_path();
@@ -2739,6 +2822,19 @@ fn assert_commit_absent(repo: &Path, commit: &str) {
         !output.status.success(),
         "commit {commit} should not be present in {}",
         repo.display()
+    );
+}
+
+fn assert_commit_present(repo: &Path, commit: &str) {
+    let output = git_command(repo)
+        .args(["cat-file", "-e", &format!("{commit}^{{commit}}")])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "commit {commit} should be present in {}: {}",
+        repo.display(),
+        String::from_utf8_lossy(&output.stderr)
     );
 }
 
