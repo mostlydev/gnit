@@ -26,6 +26,11 @@ pub fn workspace_log() -> Result<()> {
         subject: String,
         repos: BTreeSet<String>,
     }
+    struct Entry {
+        time: i64,
+        sort_key: String,
+        line: String,
+    }
     let mut changes: HashMap<String, Change> = HashMap::new();
 
     let mut repos: Vec<(String, std::path::PathBuf)> = Vec::new();
@@ -71,28 +76,30 @@ pub fn workspace_log() -> Result<()> {
     }
 
     // Build the merged entry list.
-    let mut entries: Vec<(i64, String)> = Vec::new();
+    let mut entries: Vec<Entry> = Vec::new();
     for (id, change) in changes {
-        entries.push((
-            change.time,
-            format!(
+        entries.push(Entry {
+            time: change.time,
+            sort_key: format!("change {id}"),
+            line: format!(
                 "change {id}  ({} repo{})  {}",
                 change.repos.len(),
                 plural(change.repos.len()),
                 change.subject
             ),
-        ));
+        });
     }
     for pin in all_pins(&root)? {
         let label = pin.label.clone().unwrap_or_else(|| pin.id.clone());
-        entries.push((
-            pin_time(&pin),
-            format!(
+        entries.push(Entry {
+            time: pin_time(&pin),
+            sort_key: format!("pin {label} {}", pin.id),
+            line: format!(
                 "pin    {label}  ({} member{})",
                 pin.members.len(),
                 plural(pin.members.len())
             ),
-        ));
+        });
     }
 
     if entries.is_empty() {
@@ -100,9 +107,15 @@ pub fn workspace_log() -> Result<()> {
         return Ok(());
     }
 
-    entries.sort_by_key(|entry| std::cmp::Reverse(entry.0));
-    for (time, line) in entries {
-        println!("{}  {line}", date(time));
+    entries.sort_by(|left, right| {
+        right
+            .time
+            .cmp(&left.time)
+            .then_with(|| left.sort_key.cmp(&right.sort_key))
+            .then_with(|| left.line.cmp(&right.line))
+    });
+    for entry in entries {
+        println!("{}  {}", date(entry.time), entry.line);
     }
     Ok(())
 }

@@ -2133,6 +2133,51 @@ fn log_interleaves_changes_and_pins() {
 }
 
 #[test]
+fn log_orders_equal_timestamp_entries_by_stable_secondary_key() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    let sdk = ws.join("vendor/sdk");
+    let date = "2026-01-01T00:00:00Z";
+    let changes = [
+        (
+            "GCH-1760000000000-c",
+            "Zulu change",
+            "pub fn sdk() { /* z */ }\n",
+        ),
+        (
+            "GCH-1760000000000-a",
+            "Alpha change",
+            "pub fn sdk() { /* a */ }\n",
+        ),
+        (
+            "GCH-1760000000000-b",
+            "Middle change",
+            "pub fn sdk() { /* m */ }\n",
+        ),
+    ];
+
+    for (change_id, subject, contents) in changes {
+        fs::write(sdk.join("lib.rs"), contents).unwrap();
+        git(&sdk, ["add", "lib.rs"]);
+        git_commit_at(
+            &sdk,
+            &format!("{subject}\n\nGnit-Change-Id: {change_id}"),
+            date,
+        );
+    }
+
+    let output = gnit_output(ws, ["log"]);
+    let change_lines = output
+        .lines()
+        .filter(|line| line.contains("  change GCH-"))
+        .collect::<Vec<_>>();
+    assert_eq!(change_lines.len(), 3, "{output}");
+    assert!(change_lines[0].contains("GCH-1760000000000-a"), "{output}");
+    assert!(change_lines[1].contains("GCH-1760000000000-b"), "{output}");
+    assert!(change_lines[2].contains("GCH-1760000000000-c"), "{output}");
+}
+
+#[test]
 fn upkeep_restores_missing_local_exclude() {
     let fixture = clean_workspace_with_sdk();
     let ws = fixture.root.as_path();
@@ -2407,6 +2452,16 @@ fn git<const N: usize>(dir: &Path, args: [&str; N]) {
 
 fn git_init(dir: &Path) {
     git(dir, ["init", "-b", "master"]);
+}
+
+fn git_commit_at(dir: &Path, message: &str, date: &str) {
+    let status = git_command(dir)
+        .env("GIT_AUTHOR_DATE", date)
+        .env("GIT_COMMITTER_DATE", date)
+        .args(["commit", "-m", message])
+        .status()
+        .unwrap();
+    assert!(status.success(), "git commit failed in {}", dir.display());
 }
 
 fn git_args(dir: &Path, args: &[&str]) {
