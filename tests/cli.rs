@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use fs2::FileExt;
 use predicates::prelude::*;
 use serde_json::json;
 use std::fs;
@@ -927,6 +928,69 @@ fn invalid_utf8_root_exclude_is_not_overwritten_by_upkeep_or_explicit_repair() {
         .failure()
         .stderr(predicate::str::contains("read git exclude"));
     assert_eq!(fs::read(&exclude).unwrap(), original);
+}
+
+#[test]
+fn mutating_command_fails_when_workspace_lock_is_held() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    let lock = hold_workspace_lock(ws);
+
+    gnit_command(ws, ["ignore", "scratch"])
+        .env("GNIT_LOCK_TIMEOUT_MS", "1")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "another gnit process holds the workspace lock",
+        ));
+
+    drop(lock);
+}
+
+#[test]
+fn read_only_command_skips_upkeep_when_workspace_lock_is_held() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    let exclude = ws.join(".git/info/exclude");
+    let stripped = fs::read_to_string(&exclude)
+        .unwrap()
+        .lines()
+        .filter(|line| *line != "vendor/sdk")
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(&exclude, format!("{stripped}\n")).unwrap();
+    let lock = hold_workspace_lock(ws);
+
+    gnit_command(ws, ["--verbose", "status"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "gnit upkeep: skipped local maintenance",
+        ));
+
+    let exclude_text = fs::read_to_string(&exclude).unwrap();
+    assert!(
+        !exclude_text.lines().any(|line| line == "vendor/sdk"),
+        "read-only command should not repair excludes while lock is held: {exclude_text}"
+    );
+    drop(lock);
+}
+
+#[test]
+fn workspace_lock_file_stays_local() {
+    let fixture = clean_workspace_with_sdk();
+    let ws = fixture.root.as_path();
+    assert!(ws.join(".gnit/lock").exists());
+    let tracked = git_out(ws, ["ls-files", ".gnit/lock"]);
+    assert!(
+        tracked.trim().is_empty(),
+        ".gnit/lock should stay untracked: {tracked}"
+    );
+    let exclude = fs::read_to_string(ws.join(".git/info/exclude")).unwrap();
+    assert!(
+        exclude.lines().any(|line| line == ".gnit/lock"),
+        ".gnit/lock should be hidden by local excludes: {exclude}"
+    );
 }
 
 #[test]
@@ -2700,6 +2764,19 @@ fn git_base_command() -> std::process::Command {
         .env("GIT_COMMITTER_NAME", "Gnit Test")
         .env("GIT_COMMITTER_EMAIL", "gnit-test@example.com");
     command
+}
+
+fn hold_workspace_lock(root: &Path) -> std::fs::File {
+    let lock_path = root.join(".gnit/lock");
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(lock_path)
+        .unwrap();
+    file.lock_exclusive().unwrap();
+    file
 }
 
 fn tempdir_without_gnit_ancestor() -> tempfile::TempDir {

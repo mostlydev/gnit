@@ -9,6 +9,14 @@ use crate::workspace;
 /// local, so a fresh clone/checkout needs them reapplied) — never touching
 /// member working trees, never hitting the network, never committing.
 pub fn run_transparent_upkeep(verbose: bool) {
+    run_transparent_upkeep_inner(verbose, true);
+}
+
+pub fn run_transparent_upkeep_locked(verbose: bool) {
+    run_transparent_upkeep_inner(verbose, false);
+}
+
+fn run_transparent_upkeep_inner(verbose: bool, acquire_lock: bool) {
     let Ok(cwd) = env::current_dir() else {
         return;
     };
@@ -18,6 +26,29 @@ pub fn run_transparent_upkeep(verbose: bool) {
         }
         return;
     };
+
+    let _lock = if acquire_lock {
+        match crate::lock::WorkspaceLock::try_acquire(&root) {
+            Ok(Some(lock)) => Some(lock),
+            Ok(None) => {
+                if verbose {
+                    eprintln!(
+                        "gnit upkeep: skipped local maintenance; another gnit process holds the workspace lock"
+                    );
+                }
+                return;
+            }
+            Err(error) => {
+                if verbose {
+                    eprintln!("gnit upkeep: skipped local maintenance: {error}");
+                }
+                return;
+            }
+        }
+    } else {
+        None
+    };
+
     let Ok(roster) = Roster::read(&root) else {
         return;
     };

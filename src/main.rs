@@ -4,6 +4,7 @@ mod cli;
 mod clone;
 mod git;
 mod ids;
+mod lock;
 mod log;
 mod metadata;
 mod migrate;
@@ -28,9 +29,14 @@ fn main() -> Result<()> {
     sigpipe::reset();
 
     let cli = Cli::parse();
+    let command_lock = acquire_command_lock(&cli.command)?;
 
     if !cli.no_upkeep && !matches!(cli.command, Commands::Update { .. }) {
-        upkeep::run_transparent_upkeep(cli.verbose);
+        if command_lock.is_some() {
+            upkeep::run_transparent_upkeep_locked(cli.verbose);
+        } else {
+            upkeep::run_transparent_upkeep(cli.verbose);
+        }
     }
     if !cli.no_upkeep && !matches!(cli.command, Commands::Update { .. }) {
         update::maybe_print_update_notice(cli.verbose);
@@ -98,5 +104,41 @@ fn main() -> Result<()> {
             SkillsCommands::Uninstall(args) => skills::uninstall(args),
             SkillsCommands::List => skills::list(),
         },
+    }
+}
+
+fn acquire_command_lock(command: &Commands) -> Result<Option<lock::WorkspaceLock>> {
+    if !command_requires_workspace_lock(command) {
+        return Ok(None);
+    }
+    let cwd = std::env::current_dir()?;
+    let Some(root) = workspace::find_gnit_workspace(&cwd) else {
+        return Ok(None);
+    };
+    lock::WorkspaceLock::acquire(&root).map(Some)
+}
+
+fn command_requires_workspace_lock(command: &Commands) -> bool {
+    match command {
+        Commands::Add { .. }
+        | Commands::Commit { .. }
+        | Commands::Land { .. }
+        | Commands::Checkout { .. }
+        | Commands::Adopt { .. }
+        | Commands::Ignore { .. }
+        | Commands::ImportSubmodule { .. }
+        | Commands::Doctor
+        | Commands::Migrate
+        | Commands::Pin { .. }
+        | Commands::Push { .. } => true,
+        Commands::Clone { .. }
+        | Commands::Init { .. }
+        | Commands::Status
+        | Commands::Log
+        | Commands::Change { .. }
+        | Commands::Pr { .. }
+        | Commands::Review { .. }
+        | Commands::Update { .. }
+        | Commands::Skills { .. } => false,
     }
 }

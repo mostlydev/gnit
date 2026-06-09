@@ -31,6 +31,11 @@ pub fn init(control: bool, local: bool, remote: Option<String>) -> Result<()> {
     }
 
     fs::create_dir_all(&gnit_dir).context("create .gnit")?;
+    let _lock = crate::lock::WorkspaceLock::acquire(&cwd)?;
+    if roster.exists() {
+        bail!("Gnit workspace already exists at {}", cwd.display());
+    }
+
     let mode = if local {
         "local"
     } else if control {
@@ -38,7 +43,9 @@ pub fn init(control: bool, local: bool, remote: Option<String>) -> Result<()> {
     } else {
         "shared"
     };
-    Roster::new(mode, remote).write(&cwd)?;
+    let roster_doc = Roster::new(mode, remote);
+    roster_doc.write(&cwd)?;
+    repair_required_excludes(&cwd, &roster_doc)?;
     let agent_guidance = ensure_agent_guidance(&cwd)?;
 
     if !local {
@@ -295,6 +302,7 @@ pub(crate) fn repair_required_excludes(root: &Path, roster: &Roster) -> Result<u
         }
     };
     let mut added = 0;
+    added += append_exclude(&mut text, crate::lock::LOCK_EXCLUDE);
     for member in &roster.members {
         for entry in &member.required_excludes {
             added += append_exclude(&mut text, entry);
@@ -438,9 +446,7 @@ fn commit_metadata_with_paths(root: &Path, message: &str, extra_paths: &[PathBuf
     let mut paths = vec![PathBuf::from(".gnit")];
     paths.extend(extra_paths.iter().cloned());
 
-    let mut add_args = vec![OsString::from("add")];
-    add_args.extend(paths.iter().map(|path| path.as_os_str().to_os_string()));
-    git::output_in_args(root, add_args)?;
+    stage_metadata_paths(root, extra_paths)?;
 
     let mut status_args = vec![
         OsString::from("status"),
@@ -448,6 +454,7 @@ fn commit_metadata_with_paths(root: &Path, message: &str, extra_paths: &[PathBuf
         OsString::from("--"),
     ];
     status_args.extend(paths.iter().map(|path| path.as_os_str().to_os_string()));
+    status_args.push(OsString::from(":(exclude).gnit/lock"));
     let status = git::output_in_args(root, status_args)?;
     if !status.trim().is_empty() {
         // Pathspec-scope the commit so an unrelated staged change in the root
@@ -460,6 +467,58 @@ fn commit_metadata_with_paths(root: &Path, message: &str, extra_paths: &[PathBuf
         ];
         commit_args.extend(paths.iter().map(|path| path.as_os_str().to_os_string()));
         git::output_in_args(root, commit_args)?;
+    }
+    Ok(())
+}
+
+fn stage_metadata_paths(root: &Path, extra_paths: &[PathBuf]) -> Result<()> {
+    let tracked_metadata = git::output_in(root, ["ls-files", ".gnit"])?;
+    if !tracked_metadata.trim().is_empty() {
+        git::output_in(root, ["add", "-u", "--", ".gnit"])?;
+    }
+
+    let mut add_paths = existing_metadata_files(root)?;
+    add_paths.extend(extra_paths.iter().cloned());
+    if add_paths.is_empty() {
+        return Ok(());
+    }
+
+    let mut add_args = vec![OsString::from("add"), OsString::from("--")];
+    add_args.extend(add_paths.iter().map(|path| path.as_os_str().to_os_string()));
+    git::output_in_args(root, add_args)?;
+    Ok(())
+}
+
+fn existing_metadata_files(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut paths = Vec::new();
+    collect_metadata_files(root, Path::new(".gnit"), &mut paths)?;
+    Ok(paths)
+}
+
+fn collect_metadata_files(root: &Path, rel: &Path, paths: &mut Vec<PathBuf>) -> Result<()> {
+    let dir = root.join(rel);
+    if !dir.exists() {
+        return Ok(());
+    }
+    let mut entries = fs::read_dir(&dir)
+        .with_context(|| format!("read metadata directory {}", dir.display()))?
+        .collect::<std::io::Result<Vec<_>>>()
+        .with_context(|| format!("read metadata directory {}", dir.display()))?;
+    entries.sort_by_key(|entry| entry.file_name());
+
+    for entry in entries {
+        let child_rel = rel.join(entry.file_name());
+        if child_rel == Path::new(crate::lock::LOCK_EXCLUDE) {
+            continue;
+        }
+        let file_type = entry
+            .file_type()
+            .with_context(|| format!("read metadata entry {}", entry.path().display()))?;
+        if file_type.is_dir() {
+            collect_metadata_files(root, &child_rel, paths)?;
+        } else {
+            paths.push(child_rel);
+        }
     }
     Ok(())
 }
