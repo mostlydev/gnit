@@ -32,6 +32,10 @@ pub fn run_transparent_upkeep(verbose: bool) {
             let noun = if n == 1 { "entry" } else { "entries" };
             eprintln!("nit upkeep: restored {n} local exclude {noun}");
         }
-        Err(_) => {}
+        Err(error) => {
+            if verbose {
+                eprintln!("nit upkeep: skipped exclude repair: {error}");
+            }
+        }
     }
 }

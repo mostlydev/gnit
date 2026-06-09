@@ -799,6 +799,27 @@ fn ignore_and_doctor_repair_root_excludes() {
 }
 
 #[test]
+fn invalid_utf8_root_exclude_is_not_overwritten_by_upkeep_or_explicit_repair() {
+    let fixture = clean_workspace_with_sdk();
+    let workspace = fixture.root.as_path();
+    let exclude = workspace.join(".git/info/exclude");
+    let original = b"# user excludes\n*.log\n\xff\n";
+    fs::write(&exclude, original).unwrap();
+
+    nit(workspace, ["--verbose", "status"])
+        .success()
+        .stderr(predicate::str::contains(
+            "nit upkeep: skipped exclude repair",
+        ));
+    assert_eq!(fs::read(&exclude).unwrap(), original);
+
+    nit(workspace, ["doctor"])
+        .failure()
+        .stderr(predicate::str::contains("read git exclude"));
+    assert_eq!(fs::read(&exclude).unwrap(), original);
+}
+
+#[test]
 fn push_and_checkout_workflow_reconstructs_missing_member() {
     let fixture = workspace_with_remotes();
     let workspace = fixture.root.as_path();

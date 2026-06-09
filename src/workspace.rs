@@ -265,7 +265,13 @@ pub(crate) fn repair_required_excludes(root: &Path, roster: &Roster) -> Result<u
         return Ok(0);
     }
 
-    let mut text = fs::read_to_string(&exclude).unwrap_or_default();
+    let mut text = match fs::read_to_string(&exclude) {
+        Ok(text) => text,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(err) => {
+            return Err(err).with_context(|| format!("read git exclude {}", exclude.display()));
+        }
+    };
     let mut added = 0;
     for member in &roster.members {
         for entry in &member.required_excludes {
