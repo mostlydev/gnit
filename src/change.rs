@@ -186,17 +186,11 @@ fn commit_staged(root: &Path, message: &str) -> Result<String> {
     let mut committed = Vec::new();
 
     for repo in repos {
+        ensure_no_staged_workspace_metadata(&repo)?;
         if !has_staged_changes(&repo)? {
             continue;
         }
-        if repo.is_workspace_root {
-            git::output_in_args(
-                &repo.root,
-                ["commit", "-m", &full_message, "--", ".", ":(exclude).nit"],
-            )?;
-        } else {
-            git::output_in(&repo.root, ["commit", "-m", &full_message])?;
-        }
+        git::output_in(&repo.root, ["commit", "-m", &full_message])?;
         let commit = git::output_in(&repo.root, ["rev-parse", "HEAD"])?
             .trim()
             .to_string();
@@ -308,6 +302,18 @@ fn has_staged_changes(repo: &Repo) -> Result<bool> {
         .map(|clean| !clean);
     }
     git::status_in_args(&repo.root, ["diff", "--cached", "--quiet"]).map(|clean| !clean)
+}
+
+fn ensure_no_staged_workspace_metadata(repo: &Repo) -> Result<()> {
+    if !repo.is_workspace_root {
+        return Ok(());
+    }
+    let metadata_clean =
+        git::status_in_args(&repo.root, ["diff", "--cached", "--quiet", "--", ".nit"])?;
+    if !metadata_clean {
+        bail!("workspace metadata is staged; commit or unstage .nit separately before nit commit");
+    }
+    Ok(())
 }
 
 fn add_args(paths: &[PathBuf]) -> Vec<String> {

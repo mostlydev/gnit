@@ -683,6 +683,88 @@ fn commit_change_and_land_workflow_records_shared_history() {
 }
 
 #[test]
+fn commit_respects_index_and_leaves_unstaged_tracked_changes() {
+    let fixture = clean_workspace_with_sdk();
+    let workspace = fixture.root.as_path();
+    let sdk = workspace.join("vendor/sdk");
+
+    fs::write(workspace.join("root-staged.txt"), "root staged v1\n").unwrap();
+    fs::write(workspace.join("root-unstaged.txt"), "root unstaged v1\n").unwrap();
+    git(workspace, ["add", "root-staged.txt", "root-unstaged.txt"]);
+    git(workspace, ["commit", "-m", "Add root tracked files"]);
+
+    fs::write(sdk.join("sdk-staged.txt"), "sdk staged v1\n").unwrap();
+    fs::write(sdk.join("sdk-unstaged.txt"), "sdk unstaged v1\n").unwrap();
+    git(&sdk, ["add", "sdk-staged.txt", "sdk-unstaged.txt"]);
+    git(&sdk, ["commit", "-m", "Add sdk tracked files"]);
+
+    fs::write(workspace.join("root-staged.txt"), "root staged v2\n").unwrap();
+    fs::write(workspace.join("root-unstaged.txt"), "root unstaged v2\n").unwrap();
+    fs::write(sdk.join("sdk-staged.txt"), "sdk staged v2\n").unwrap();
+    fs::write(sdk.join("sdk-unstaged.txt"), "sdk unstaged v2\n").unwrap();
+
+    nit(
+        workspace,
+        ["add", "root-staged.txt", "vendor/sdk/sdk-staged.txt"],
+    );
+    nit(workspace, ["commit", "-m", "Commit staged only"]).success();
+
+    let root_files = git_out(workspace, ["show", "--name-only", "--format=", "HEAD"]);
+    assert!(root_files.lines().any(|line| line == "root-staged.txt"));
+    assert!(
+        !root_files.lines().any(|line| line == "root-unstaged.txt"),
+        "root commit swept unstaged tracked file:\n{root_files}"
+    );
+
+    let sdk_files = git_out(&sdk, ["show", "--name-only", "--format=", "HEAD"]);
+    assert!(sdk_files.lines().any(|line| line == "sdk-staged.txt"));
+    assert!(
+        !sdk_files.lines().any(|line| line == "sdk-unstaged.txt"),
+        "member commit swept unstaged tracked file:\n{sdk_files}"
+    );
+
+    let root_status = git_out(workspace, ["status", "--porcelain"]);
+    assert!(
+        root_status
+            .lines()
+            .any(|line| line == " M root-unstaged.txt"),
+        "unstaged root change should remain dirty:\n{root_status}"
+    );
+    assert!(
+        !root_status
+            .lines()
+            .any(|line| line.ends_with("root-staged.txt")),
+        "staged root change should have been committed:\n{root_status}"
+    );
+
+    let sdk_status = git_out(&sdk, ["status", "--porcelain"]);
+    assert!(
+        sdk_status.lines().any(|line| line == " M sdk-unstaged.txt"),
+        "unstaged member change should remain dirty:\n{sdk_status}"
+    );
+    assert!(
+        !sdk_status
+            .lines()
+            .any(|line| line.ends_with("sdk-staged.txt")),
+        "staged member change should have been committed:\n{sdk_status}"
+    );
+}
+
+#[test]
+fn commit_rejects_staged_workspace_metadata() {
+    let fixture = clean_workspace_with_sdk();
+    let workspace = fixture.root.as_path();
+    let roster_path = workspace.join(".nit/roster.yaml");
+    let roster = fs::read_to_string(&roster_path).unwrap();
+    fs::write(&roster_path, format!("{roster}\n# staged metadata\n")).unwrap();
+    git(workspace, ["add", ".nit/roster.yaml"]);
+
+    nit(workspace, ["commit", "-m", "Metadata should stay metadata"])
+        .failure()
+        .stderr(predicate::str::contains("workspace metadata is staged"));
+}
+
+#[test]
 fn adopt_rejects_plain_subdirectory() {
     let fixture = clean_workspace_with_sdk();
     let workspace = fixture.root.as_path();
