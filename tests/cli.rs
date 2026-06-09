@@ -877,6 +877,18 @@ fn review_fetch_keeps_clear_remediation_when_commit_stays_unavailable() {
 }
 
 #[test]
+fn review_fetch_is_rejected_for_change_targets() {
+    let fixture = clean_workspace_with_sdk();
+    let workspace = fixture.root.as_path();
+
+    gnit(workspace, ["review", "--fetch", "GCH-1760000000000-72e5"])
+        .failure()
+        .stderr(predicate::str::contains(
+            "--fetch is only supported when reviewing a Pin",
+        ));
+}
+
+#[test]
 fn commit_respects_index_and_leaves_unstaged_tracked_changes() {
     let fixture = clean_workspace_with_sdk();
     let workspace = fixture.root.as_path();
