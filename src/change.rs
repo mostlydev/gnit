@@ -10,7 +10,7 @@ use crate::metadata::Roster;
 use crate::pin;
 use crate::workspace;
 
-const TRAILER: &str = "Nit-Change-Id";
+const TRAILER: &str = "Gnit-Change-Id";
 
 #[derive(Debug, Clone)]
 pub struct ChangeCommit {
@@ -31,22 +31,22 @@ struct Repo {
 
 pub fn add(paths: Vec<PathBuf>, all: bool, repo: Option<String>) -> Result<()> {
     let cwd = env::current_dir()?;
-    let root = workspace::find_nit_workspace(&cwd)
-        .context("not in a Nit workspace; run `nit init` first")?;
+    let root = workspace::find_gnit_workspace(&cwd)
+        .context("not in a Gnit workspace; run `gnit init` first")?;
     let roster = Roster::read(&root)?;
     let repos = workspace_repos(&root, &roster);
 
     if all && (!paths.is_empty() || repo.is_some()) {
-        bail!("use either `nit add -A` or explicit paths, not both");
+        bail!("use either `gnit add -A` or explicit paths, not both");
     }
     if !all && paths.is_empty() {
-        bail!("nothing specified; use `nit add <path>...` or `nit add -A`");
+        bail!("nothing specified; use `gnit add <path>...` or `gnit add -A`");
     }
 
     if all {
         for repo in &repos {
             if repo.is_workspace_root {
-                git::output_in_args(&repo.root, ["add", "-A", "--", ".", ":(exclude).nit"])?;
+                git::output_in_args(&repo.root, ["add", "-A", "--", ".", ":(exclude).gnit"])?;
             } else {
                 git::output_in(&repo.root, ["add", "-A"])?;
             }
@@ -70,7 +70,7 @@ pub fn add(paths: Vec<PathBuf>, all: bool, repo: Option<String>) -> Result<()> {
     for path in paths {
         let abs = absolutize(&cwd, &path);
         let owner = owner_for_path(&repos, &abs)
-            .with_context(|| format!("{} is outside the Nit workspace", path.display()))?;
+            .with_context(|| format!("{} is outside the Gnit workspace", path.display()))?;
         let repo_path = relative_to(&owner.root, &abs)?;
         grouped
             .entry(owner.id.clone())
@@ -89,15 +89,15 @@ pub fn add(paths: Vec<PathBuf>, all: bool, repo: Option<String>) -> Result<()> {
 
 pub fn commit(message: String) -> Result<String> {
     let cwd = env::current_dir()?;
-    let root = workspace::find_nit_workspace(&cwd)
-        .context("not in a Nit workspace; run `nit init` first")?;
+    let root = workspace::find_gnit_workspace(&cwd)
+        .context("not in a Gnit workspace; run `gnit init` first")?;
     commit_staged(&root, &message)
 }
 
 pub fn land(message: String, name: Option<String>) -> Result<()> {
     let cwd = env::current_dir()?;
-    let root = workspace::find_nit_workspace(&cwd)
-        .context("not in a Nit workspace; run `nit init` first")?;
+    let root = workspace::find_gnit_workspace(&cwd)
+        .context("not in a Gnit workspace; run `gnit init` first")?;
     let change_id = commit_staged(&root, &message)?;
     pin::create_with_changes(name, vec![change_id.clone()], false)?;
     println!("landed Change {change_id}");
@@ -151,7 +151,7 @@ pub fn log(id: Option<String>) -> Result<()> {
         .map(|(_, id)| id)
         .collect::<BTreeSet<_>>();
     if ids.is_empty() {
-        println!("No Nit changes found.");
+        println!("No Gnit changes found.");
     } else {
         for id in ids {
             println!("{id}");
@@ -259,7 +259,7 @@ fn scan_change_commits(repos: &[Repo]) -> Result<Vec<(ChangeCommit, String)>> {
 
 fn trailer_value(body: &str) -> Option<String> {
     body.lines()
-        .find_map(|line| line.trim().strip_prefix("Nit-Change-Id: "))
+        .find_map(|line| line.trim().strip_prefix("Gnit-Change-Id: "))
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
@@ -297,7 +297,7 @@ fn has_staged_changes(repo: &Repo) -> Result<bool> {
     if repo.is_workspace_root {
         return git::status_in_args(
             &repo.root,
-            ["diff", "--cached", "--quiet", "--", ".", ":(exclude).nit"],
+            ["diff", "--cached", "--quiet", "--", ".", ":(exclude).gnit"],
         )
         .map(|clean| !clean);
     }
@@ -309,9 +309,11 @@ fn ensure_no_staged_workspace_metadata(repo: &Repo) -> Result<()> {
         return Ok(());
     }
     let metadata_clean =
-        git::status_in_args(&repo.root, ["diff", "--cached", "--quiet", "--", ".nit"])?;
+        git::status_in_args(&repo.root, ["diff", "--cached", "--quiet", "--", ".gnit"])?;
     if !metadata_clean {
-        bail!("workspace metadata is staged; commit or unstage .nit separately before nit commit");
+        bail!(
+            "workspace metadata is staged; commit or unstage .gnit separately before gnit commit"
+        );
     }
     Ok(())
 }
@@ -336,7 +338,7 @@ fn add_args_for_paths(root: &Path, paths: &[PathBuf]) -> Result<Vec<String>> {
 
 fn current_root() -> Result<PathBuf> {
     let cwd = env::current_dir()?;
-    workspace::find_nit_workspace(&cwd).context("not in a Nit workspace; run `nit init` first")
+    workspace::find_gnit_workspace(&cwd).context("not in a Gnit workspace; run `gnit init` first")
 }
 
 fn absolutize(cwd: &Path, path: &Path) -> PathBuf {

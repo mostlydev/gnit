@@ -5,8 +5,8 @@ use anyhow::bail;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-pub const ROSTER_PATH: &str = ".nit/roster.yaml";
-pub const PINS_DIR: &str = ".nit/pins";
+pub const ROSTER_PATH: &str = ".gnit/roster.yaml";
+pub const PINS_DIR: &str = ".gnit/pins";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct Roster {
@@ -196,12 +196,12 @@ mod tests {
             commit: "abc123".to_string(),
             branch_hint: Some("main".to_string()),
         });
-        pin.provenance.changes.push("NCH-20260603-test".to_string());
+        pin.provenance.changes.push("GCH-20260603-test".to_string());
 
         let path = pin.write(temp.path()).unwrap();
         let actual = Pin::read(temp.path(), "PIN-20260603-test").unwrap();
 
-        assert_eq!(path, temp.path().join(".nit/pins/PIN-20260603-test.yaml"));
+        assert_eq!(path, temp.path().join(".gnit/pins/PIN-20260603-test.yaml"));
         assert_eq!(actual, pin);
     }
 }

@@ -8,16 +8,16 @@ use crate::git;
 use crate::metadata::{Pin, Roster, PINS_DIR};
 use crate::workspace;
 
-const TRAILER: &str = "Nit-Change-Id";
+const TRAILER: &str = "Gnit-Change-Id";
 
 /// Unified, interleaved workspace timeline of Changes and Pins, newest first.
-/// Changes are reconstructed from `Nit-Change-Id` trailers across member repos;
-/// Pins are read from `.nit/pins/`. This is the operator's retrievable shared
+/// Changes are reconstructed from `Gnit-Change-Id` trailers across member repos;
+/// Pins are read from `.gnit/pins/`. This is the operator's retrievable shared
 /// graph as a single command.
 pub fn workspace_log() -> Result<()> {
     let cwd = env::current_dir()?;
-    let root = workspace::find_nit_workspace(&cwd)
-        .context("not in a Nit workspace; run `nit init` first")?;
+    let root = workspace::find_gnit_workspace(&cwd)
+        .context("not in a Gnit workspace; run `gnit init` first")?;
     let roster = Roster::read(&root)?;
 
     // Aggregate changes across repos by Change-Id.
@@ -96,7 +96,7 @@ pub fn workspace_log() -> Result<()> {
     }
 
     if entries.is_empty() {
-        println!("No Nit changes or pins yet.");
+        println!("No Gnit changes or pins yet.");
         return Ok(());
     }
 

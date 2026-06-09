@@ -8,63 +8,63 @@ fresh machine, and review the combined artifact.
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/mostlydev/nit/master/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/mostlydev/gnit/master/install.sh | sh
 ```
 
 This downloads the latest release for your platform, verifies its SHA-256
-checksum, and installs `nit` to `~/.local/bin` (override with `NIT_INSTALL_DIR`).
-It needs `git` and `curl`. Verify the install with `nit doctor`, and update later
-with `nit update`.
+checksum, and installs `gnit` to `~/.local/bin` (override with `GNIT_INSTALL_DIR`).
+It needs `git` and `curl`. Verify the install with `gnit doctor`, and update later
+with `gnit update`.
 
 ## Create A Workspace
 
 ```sh
 mkdir product && cd product
-nit init --control --remote git@github.com:example/product-workspace.git
+gnit init --control --remote git@github.com:example/product-workspace.git
 
 git clone git@github.com:example/app.git app
 git clone git@github.com:example/sdk.git sdk
 git clone git@github.com:example/docs.git docs
 
-nit adopt app sdk docs
-nit pin baseline
-nit push
+gnit adopt app sdk docs
+gnit pin baseline
+gnit push
 ```
 
-`nit init` also drops a short Nit workspace note into `AGENTS.md` (and `CLAUDE.md`
-if you keep one) so coding agents reach for the `nit` CLI and skill instead of
-hand-managing the member repos. `nit doctor` re-adds it if it ever goes missing.
+`gnit init` also drops a short Gnit workspace note into `AGENTS.md` (and `CLAUDE.md`
+if you keep one) so coding agents reach for the `gnit` CLI and skill instead of
+hand-managing the member repos. `gnit doctor` re-adds it if it ever goes missing.
 
 ## Publish A Cross-Repo Change
 
 ```sh
-nit add -A
-nit land -m "Publish webhook retry update"
-nit push
-nit pr open
+gnit add -A
+gnit land -m "Publish webhook retry update"
+gnit push
+gnit pr open
 ```
 
-`nit land` is the human-facing publish verb. It commits staged member changes,
-creates an unnamed Pin, and lets `nit push` publish member commits before the Pin.
-If one member push fails, Nit reports what landed, leaves later targets
+`gnit land` is the human-facing publish verb. It commits staged member changes,
+creates an unnamed Pin, and lets `gnit push` publish member commits before the Pin.
+If one member push fails, Gnit reports what landed, leaves later targets
 not-attempted, and holds the workspace root back. After resolving the member
-repo, run `nit push` again, or use `nit push --resume` as an explicit retry.
+repo, run `gnit push` again, or use `gnit push --resume` as an explicit retry.
 
-`nit pr open` creates or adopts the ordinary GitHub PRs for the current Change
-and writes Nit-owned cross-links into each PR body. It opens draft PRs by
-default. `nit pr` is the read-only status command to check what exists, what is
+`gnit pr open` creates or adopts the ordinary GitHub PRs for the current Change
+and writes Gnit-owned cross-links into each PR body. It opens draft PRs by
+default. `gnit pr` is the read-only status command to check what exists, what is
 missing, and which checks are passing:
 
 ```text
-$ nit pr
-Workspace change NCH-1780970169140-18d6
+$ gnit pr
+Workspace change GCH-1780970169140-18d6
 repo                         branch              base        pr        state     checks
 root (metadata)              feature/pr-flow     master      #1        open      pending
 sdk                          feature/pr-flow     master      #2        open      pass
 app                          feature/pr-flow     master      missing   -         -
 
-$ nit pr open
-Opening PRs for Change NCH-1780970169140-18d6
+$ gnit pr open
+Opening PRs for Change GCH-1780970169140-18d6
 Title: Add linked PR flow
 Mode: draft
   root                     already open
@@ -73,27 +73,27 @@ Mode: draft
 PRs synchronized.
 ```
 
-Re-running `nit pr open` is safe: it refreshes already-open PRs instead of
+Re-running `gnit pr open` is safe: it refreshes already-open PRs instead of
 duplicating them, so it doubles as the recovery command after a network blip.
 
 ```sh
-nit review <change-id-or-pin>
+gnit review <change-id-or-pin>
 ```
 
-`nit review` is local-only. If a pinned member commit is not available in the
-current clone, it names the member and prints the `nit checkout` or `git fetch`
+`gnit review` is local-only. If a pinned member commit is not available in the
+current clone, it names the member and prints the `gnit checkout` or `git fetch`
 command that will hydrate it.
 
 ## Reconstruct A Workspace
 
 ```sh
-nit clone git@github.com:example/product-workspace.git product --pin baseline
+gnit clone git@github.com:example/product-workspace.git product --pin baseline
 ```
 
-`nit clone` clones the control repo and hydrates member repos from the roster.
+`gnit clone` clones the control repo and hydrates member repos from the roster.
 With `--pin`, it also materializes the selected Pin.
 
 Pinned checkout is intentionally exact, but it stays branch-aware. If the pinned
-commit is a local or remote branch tip, Nit checks out that branch instead of
+commit is a local or remote branch tip, Gnit checks out that branch instead of
 leaving you on a detached HEAD. It refuses to overwrite dirty member worktrees
-unless you use `nit checkout <pin> --exact`.
+unless you use `gnit checkout <pin> --exact`.

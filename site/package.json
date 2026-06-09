@@ -1,5 +1,5 @@
 {
-  "name": "nit-site",
+  "name": "gnit-site",
   "private": true,
   "scripts": {
     "dev": "vitepress dev",

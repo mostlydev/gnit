@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       # Pages is enabled out-of-band (Settings > Pages > Source = GitHub Actions,
-      # or `gh api --method POST repos/<owner>/nit/pages -f build_type=workflow`).
+      # or `gh api --method POST repos/<owner>/gnit/pages -f build_type=workflow`).
       # The workflow's integration token cannot create the Pages site itself.
       - uses: actions/setup-node@v6
         with:
@@ -37,10 +37,10 @@ jobs:
         run: npm run build
         working-directory: site
         env:
-          # Project page at <owner>.github.io/nit/ needs base "/nit/".
-          # If a custom domain (e.g. nit.dev) is added later: set this to "/"
+          # Project page at <owner>.github.io/gnit/ needs base "/gnit/".
+          # If a custom domain (e.g. gnit.dev) is added later: set this to "/"
           # and add site/public/CNAME. The base is env-driven in config.mts.
-          VITEPRESS_BASE: /nit/
+          VITEPRESS_BASE: /gnit/
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site/.vitepress/dist

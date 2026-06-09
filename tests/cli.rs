@@ -29,7 +29,7 @@ struct ThreeMemberRemoteFixture {
 
 #[test]
 fn help_describes_nit() {
-    let mut cmd = Command::cargo_bin("nit").unwrap();
+    let mut cmd = Command::cargo_bin("gnit").unwrap();
     cmd.arg("--help")
         .assert()
         .success()
@@ -38,11 +38,11 @@ fn help_describes_nit() {
 
 #[test]
 fn doctor_runs() {
-    let mut cmd = Command::cargo_bin("nit").unwrap();
+    let mut cmd = Command::cargo_bin("gnit").unwrap();
     cmd.arg("doctor")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Nit doctor"))
+        .stdout(predicate::str::contains("Gnit doctor"))
         .stdout(predicate::str::contains(
             "upkeep: automatic non-destructive upkeep enabled",
         ));
@@ -50,13 +50,13 @@ fn doctor_runs() {
 
 #[test]
 fn status_outside_workspace_is_clear() {
-    let temp = tempdir_without_nit_ancestor();
-    let mut cmd = Command::cargo_bin("nit").unwrap();
+    let temp = tempdir_without_gnit_ancestor();
+    let mut cmd = Command::cargo_bin("gnit").unwrap();
     cmd.current_dir(temp.path())
         .arg("status")
         .assert()
         .success()
-        .stdout(predicate::str::contains("No Nit workspace found."));
+        .stdout(predicate::str::contains("No Gnit workspace found."));
 }
 
 #[test]
@@ -64,8 +64,8 @@ fn init_and_adopt_nested_repo_workflow_preserves_root_staging() {
     let temp = tempfile::tempdir().unwrap();
     let workspace = temp.path();
     git_init(workspace);
-    git(workspace, ["config", "user.email", "nit-test@example.com"]);
-    git(workspace, ["config", "user.name", "Nit Test"]);
+    git(workspace, ["config", "user.email", "gnit-test@example.com"]);
+    git(workspace, ["config", "user.name", "Gnit Test"]);
 
     std::fs::write(workspace.join("README.md"), "root\n").unwrap();
     git(workspace, ["add", "README.md"]);
@@ -75,11 +75,11 @@ fn init_and_adopt_nested_repo_workflow_preserves_root_staging() {
     git_init(&workspace.join("vendor/sdk"));
     git(
         &workspace.join("vendor/sdk"),
-        ["config", "user.email", "nit-test@example.com"],
+        ["config", "user.email", "gnit-test@example.com"],
     );
     git(
         &workspace.join("vendor/sdk"),
-        ["config", "user.name", "Nit Test"],
+        ["config", "user.name", "Gnit Test"],
     );
     std::fs::write(workspace.join("vendor/sdk/lib.rs"), "pub fn sdk() {}\n").unwrap();
     git(&workspace.join("vendor/sdk"), ["add", "lib.rs"]);
@@ -91,15 +91,15 @@ fn init_and_adopt_nested_repo_workflow_preserves_root_staging() {
     std::fs::write(workspace.join("UNRELATED.txt"), "keep me staged\n").unwrap();
     git(workspace, ["add", "UNRELATED.txt"]);
 
-    nit(workspace, ["init"])
+    gnit(workspace, ["init"])
         .success()
-        .stdout(predicate::str::contains("initialized Nit workspace"));
+        .stdout(predicate::str::contains("initialized Gnit workspace"));
 
-    nit(workspace, ["adopt", "vendor/sdk", "--id", "sdk"])
+    gnit(workspace, ["adopt", "vendor/sdk", "--id", "sdk"])
         .success()
         .stdout(predicate::str::contains("adopted sdk"));
 
-    let roster = std::fs::read_to_string(workspace.join(".nit/roster.yaml")).unwrap();
+    let roster = std::fs::read_to_string(workspace.join(".gnit/roster.yaml")).unwrap();
     assert!(roster.contains("id: sdk"));
     assert!(roster.contains("path: vendor/sdk"));
     assert!(roster.contains("required_excludes"));
@@ -114,28 +114,28 @@ fn init_and_adopt_nested_repo_workflow_preserves_root_staging() {
         "unrelated staged change should remain staged: {root_status}"
     );
     assert!(
-        !root_status.lines().any(|line| line.contains(".nit/")),
-        "Nit metadata should have been committed: {root_status}"
+        !root_status.lines().any(|line| line.contains(".gnit/")),
+        "Gnit metadata should have been committed: {root_status}"
     );
     assert!(
         !root_status.lines().any(|line| line.contains("AGENTS.md")),
-        "Nit guidance should have been committed: {root_status}"
+        "Gnit guidance should have been committed: {root_status}"
     );
 
     let last_commit = git_out(workspace, ["log", "-1", "--pretty=%s"]);
-    assert_eq!(last_commit.trim(), "Update Nit roster");
+    assert_eq!(last_commit.trim(), "Update Gnit roster");
 
-    nit(workspace, ["status"])
+    gnit(workspace, ["status"])
         .success()
         .stdout(predicate::str::contains("Repos"))
         .stdout(predicate::str::contains("sdk"))
         .stdout(predicate::str::contains("clean"));
 
-    nit(workspace, ["doctor"])
+    gnit(workspace, ["doctor"])
         .success()
         .stdout(predicate::str::contains("roster members: 1"));
 
-    nit(workspace, ["pin", "baseline"])
+    gnit(workspace, ["pin", "baseline"])
         .failure()
         .stderr(predicate::str::contains(
             "workspace root has uncommitted changes",
@@ -144,11 +144,11 @@ fn init_and_adopt_nested_repo_workflow_preserves_root_staging() {
     git(workspace, ["commit", "-m", "Keep unrelated file"]);
 
     let sdk_head = git_out(&workspace.join("vendor/sdk"), ["rev-parse", "HEAD"]);
-    nit(workspace, ["pin", "baseline"])
+    gnit(workspace, ["pin", "baseline"])
         .success()
         .stdout(predicate::str::contains("created Pin PIN-"));
 
-    let pin_paths = std::fs::read_dir(workspace.join(".nit/pins"))
+    let pin_paths = std::fs::read_dir(workspace.join(".gnit/pins"))
         .unwrap()
         .map(|entry| entry.unwrap().path())
         .collect::<Vec<_>>();
@@ -160,7 +160,7 @@ fn init_and_adopt_nested_repo_workflow_preserves_root_staging() {
     assert!(pin.contains(sdk_head.trim()));
 
     let last_commit = git_out(workspace, ["log", "-1", "--pretty=%s"]);
-    assert!(last_commit.starts_with("Create Nit pin PIN-"));
+    assert!(last_commit.starts_with("Create Gnit pin PIN-"));
 }
 
 #[test]
@@ -168,18 +168,18 @@ fn init_creates_and_commits_agent_guidance() {
     let temp = tempfile::tempdir().unwrap();
     let workspace = temp.path();
     git_init(workspace);
-    git(workspace, ["config", "user.email", "nit-test@example.com"]);
-    git(workspace, ["config", "user.name", "Nit Test"]);
+    git(workspace, ["config", "user.email", "gnit-test@example.com"]);
+    git(workspace, ["config", "user.name", "Gnit Test"]);
     fs::write(workspace.join("README.md"), "root\n").unwrap();
     git(workspace, ["add", "README.md"]);
     git(workspace, ["commit", "-m", "Initial root"]);
 
-    nit(workspace, ["init"])
+    gnit(workspace, ["init"])
         .success()
-        .stdout(predicate::str::contains("initialized Nit workspace"));
+        .stdout(predicate::str::contains("initialized Gnit workspace"));
 
     let agents = fs::read_to_string(workspace.join("AGENTS.md")).unwrap();
-    assert_nit_guidance(&agents);
+    assert_gnit_guidance(&agents);
     assert!(
         !workspace.join("CLAUDE.md").exists(),
         "CLAUDE.md should not be created unless already present"
@@ -190,41 +190,41 @@ fn init_creates_and_commits_agent_guidance() {
             "status",
             "--porcelain",
             "--",
-            ".nit",
+            ".gnit",
             "AGENTS.md",
             "CLAUDE.md",
         ],
     );
     assert!(
         status.trim().is_empty(),
-        "init should commit Nit metadata and guidance docs: {status}"
+        "init should commit Gnit metadata and guidance docs: {status}"
     );
     let last_commit = git_out(workspace, ["log", "-1", "--pretty=%s"]);
-    assert_eq!(last_commit.trim(), "Initialize Nit workspace");
+    assert_eq!(last_commit.trim(), "Initialize Gnit workspace");
 }
 
 #[test]
 fn control_init_creates_repo_and_commits_agent_guidance() {
-    let temp = tempdir_without_nit_ancestor();
+    let temp = tempdir_without_gnit_ancestor();
     let workspace = temp.path();
 
-    nit(workspace, ["init", "--control"])
+    gnit(workspace, ["init", "--control"])
         .success()
-        .stdout(predicate::str::contains("initialized Nit workspace"));
+        .stdout(predicate::str::contains("initialized Gnit workspace"));
 
     assert!(workspace.join(".git").exists());
     let agents = fs::read_to_string(workspace.join("AGENTS.md")).unwrap();
-    assert_nit_guidance(&agents);
+    assert_gnit_guidance(&agents);
     let status = git_out(
         workspace,
-        ["status", "--porcelain", "--", ".nit", "AGENTS.md"],
+        ["status", "--porcelain", "--", ".gnit", "AGENTS.md"],
     );
     assert!(
         status.trim().is_empty(),
         "control init should commit metadata and guidance docs: {status}"
     );
     let last_commit = git_out(workspace, ["log", "-1", "--pretty=%s"]);
-    assert_eq!(last_commit.trim(), "Initialize Nit workspace");
+    assert_eq!(last_commit.trim(), "Initialize Gnit workspace");
 }
 
 #[test]
@@ -232,36 +232,36 @@ fn init_updates_existing_agent_docs_without_rewriting_marked_block() {
     let temp = tempfile::tempdir().unwrap();
     let workspace = temp.path();
     git_init(workspace);
-    git(workspace, ["config", "user.email", "nit-test@example.com"]);
-    git(workspace, ["config", "user.name", "Nit Test"]);
+    git(workspace, ["config", "user.email", "gnit-test@example.com"]);
+    git(workspace, ["config", "user.name", "Gnit Test"]);
     let custom_agents =
-        "<!-- nit:workspace:start -->\nCustom Nit note.\n<!-- nit:workspace:end -->\n";
+        "<!-- gnit:workspace:start -->\nCustom Gnit note.\n<!-- gnit:workspace:end -->\n";
     fs::write(workspace.join("AGENTS.md"), custom_agents).unwrap();
     fs::write(workspace.join("CLAUDE.md"), "# Claude notes\n").unwrap();
     git(workspace, ["add", "AGENTS.md", "CLAUDE.md"]);
     git(workspace, ["commit", "-m", "Add agent docs"]);
 
-    nit(workspace, ["init"]).success();
+    gnit(workspace, ["init"]).success();
 
     let agents = fs::read_to_string(workspace.join("AGENTS.md")).unwrap();
     assert_eq!(agents, custom_agents);
     let claude = fs::read_to_string(workspace.join("CLAUDE.md")).unwrap();
     assert!(claude.starts_with("# Claude notes\n\n"), "{claude}");
-    assert_nit_guidance(&claude);
+    assert_gnit_guidance(&claude);
     let status = git_out(
         workspace,
         [
             "status",
             "--porcelain",
             "--",
-            ".nit",
+            ".gnit",
             "AGENTS.md",
             "CLAUDE.md",
         ],
     );
     assert!(
         status.trim().is_empty(),
-        "init should commit changed Nit guidance docs: {status}"
+        "init should commit changed Gnit guidance docs: {status}"
     );
 }
 
@@ -271,18 +271,18 @@ fn doctor_repairs_agent_guidance_without_duplicates() {
     let workspace = fixture.root.as_path();
     fs::write(workspace.join("AGENTS.md"), "Team notes\n").unwrap();
 
-    nit(workspace, ["doctor"])
+    gnit(workspace, ["doctor"])
         .success()
         .stdout(predicate::str::contains("agent guidance: added"));
     let agents = fs::read_to_string(workspace.join("AGENTS.md")).unwrap();
     assert!(agents.contains("Team notes"), "{agents}");
-    assert_nit_guidance(&agents);
+    assert_gnit_guidance(&agents);
 
-    nit(workspace, ["doctor"])
+    gnit(workspace, ["doctor"])
         .success()
         .stdout(predicate::str::contains("agent guidance: ok"));
     let agents = fs::read_to_string(workspace.join("AGENTS.md")).unwrap();
-    assert_eq!(nit_guidance_count(&agents), 1, "{agents}");
+    assert_eq!(gnit_guidance_count(&agents), 1, "{agents}");
 }
 
 #[test]
@@ -290,19 +290,19 @@ fn local_init_writes_agent_guidance_without_commit() {
     let temp = tempfile::tempdir().unwrap();
     let workspace = temp.path();
     git_init(workspace);
-    git(workspace, ["config", "user.email", "nit-test@example.com"]);
-    git(workspace, ["config", "user.name", "Nit Test"]);
+    git(workspace, ["config", "user.email", "gnit-test@example.com"]);
+    git(workspace, ["config", "user.name", "Gnit Test"]);
     fs::write(workspace.join("README.md"), "root\n").unwrap();
     git(workspace, ["add", "README.md"]);
     git(workspace, ["commit", "-m", "Initial root"]);
 
-    nit(workspace, ["init", "--local"]).success();
+    gnit(workspace, ["init", "--local"]).success();
 
     let agents = fs::read_to_string(workspace.join("AGENTS.md")).unwrap();
-    assert_nit_guidance(&agents);
+    assert_gnit_guidance(&agents);
     let status = git_out(workspace, ["status", "--porcelain"]);
     assert!(
-        status.lines().any(|line| line == "?? .nit/"),
+        status.lines().any(|line| line == "?? .gnit/"),
         "local init should leave metadata uncommitted: {status}"
     );
     assert!(
@@ -315,11 +315,11 @@ fn local_init_writes_agent_guidance_without_commit() {
 
 #[test]
 fn update_dry_run_shows_installer() {
-    let mut cmd = Command::cargo_bin("nit").unwrap();
+    let mut cmd = Command::cargo_bin("gnit").unwrap();
     cmd.args(["update", "--dry-run"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("mostlydev/nit"))
+        .stdout(predicate::str::contains("mostlydev/gnit"))
         .stdout(predicate::str::contains("install.sh"));
 }
 
@@ -339,7 +339,7 @@ fn skills_install_link_writes_symlink_to_managed_source() {
     assert!(managed.join("SKILL.md").exists());
     assert!(fs::read_to_string(managed.join("SKILL.md"))
         .unwrap()
-        .contains("# Driving Nit"));
+        .contains("# Driving Gnit"));
     assert!(fs::symlink_metadata(&target)
         .unwrap()
         .file_type()
@@ -367,7 +367,7 @@ fn skills_install_copy_writes_real_skill_and_uninstall_keeps_managed_source() {
     let target = env.claude_skill();
     assert!(managed.join("SKILL.md").exists());
     assert!(target.join("SKILL.md").exists());
-    assert!(target.join(".nit-skill-managed").exists());
+    assert!(target.join(".gnit-skill-managed").exists());
     assert!(!fs::symlink_metadata(&target)
         .unwrap()
         .file_type()
@@ -459,7 +459,7 @@ fn skills_install_copy_refreshes_stale_managed_copy() {
 
     assert!(fs::read_to_string(env.codex_skill().join("SKILL.md"))
         .unwrap()
-        .contains("# Driving Nit"));
+        .contains("# Driving Gnit"));
 }
 
 #[cfg(unix)]
@@ -480,7 +480,7 @@ fn skills_install_link_refreshes_managed_source_on_reinstall() {
 
     assert!(fs::read_to_string(env.managed_skill().join("SKILL.md"))
         .unwrap()
-        .contains("# Driving Nit"));
+        .contains("# Driving Gnit"));
 }
 
 #[test]
@@ -520,7 +520,7 @@ fn skills_install_copy_rejects_unreadable_managed_target_skill() {
         fs::read(env.codex_skill().join("SKILL.md")).unwrap(),
         invalid
     );
-    assert!(env.codex_skill().join(".nit-skill-managed").exists());
+    assert!(env.codex_skill().join(".gnit-skill-managed").exists());
 }
 
 #[test]
@@ -532,16 +532,16 @@ fn skills_install_force_rejects_unreadable_managed_target_marker() {
         .assert()
         .success();
     let invalid = b"not utf8: \xff\n";
-    fs::write(env.codex_skill().join(".nit-skill-managed"), invalid).unwrap();
+    fs::write(env.codex_skill().join(".gnit-skill-managed"), invalid).unwrap();
 
     env.command(["skills", "install", "codex", "--copy", "--force"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("read"))
-        .stderr(predicate::str::contains(".nit-skill-managed"));
+        .stderr(predicate::str::contains(".gnit-skill-managed"));
 
     assert_eq!(
-        fs::read(env.codex_skill().join(".nit-skill-managed")).unwrap(),
+        fs::read(env.codex_skill().join(".gnit-skill-managed")).unwrap(),
         invalid
     );
     assert!(env.codex_skill().join("SKILL.md").exists());
@@ -564,7 +564,7 @@ fn skills_install_copy_self_heals_missing_managed_target_skill() {
 
     assert!(fs::read_to_string(env.codex_skill().join("SKILL.md"))
         .unwrap()
-        .contains("# Driving Nit"));
+        .contains("# Driving Gnit"));
 }
 
 #[cfg(unix)]
@@ -627,17 +627,17 @@ fn update_check_caches_latest_release_metadata() {
     )
     .unwrap();
 
-    Command::cargo_bin("nit")
+    Command::cargo_bin("gnit")
         .unwrap()
         .args(["update", "--check"])
         .env(
-            "NIT_UPDATE_CHECK_URL",
+            "GNIT_UPDATE_CHECK_URL",
             format!("file://{}", latest.display()),
         )
-        .env("NIT_UPDATE_CACHE_PATH", &cache)
+        .env("GNIT_UPDATE_CACHE_PATH", &cache)
         .assert()
         .success()
-        .stdout(predicate::str::contains("nit 9.9.9 is available"));
+        .stdout(predicate::str::contains("gnit 9.9.9 is available"));
 
     let text = std::fs::read_to_string(&cache).unwrap();
     assert!(text.contains("latest_tag=v9.9.9"), "{text}");
@@ -651,18 +651,18 @@ fn update_check_failure_is_best_effort() {
     let cache = temp.path().join("update-cache");
     let missing = temp.path().join("missing.json");
 
-    Command::cargo_bin("nit")
+    Command::cargo_bin("gnit")
         .unwrap()
         .args(["update", "--check"])
         .env(
-            "NIT_UPDATE_CHECK_URL",
+            "GNIT_UPDATE_CHECK_URL",
             format!("file://{}", missing.display()),
         )
-        .env("NIT_UPDATE_CHECK_TIMEOUT_SECS", "1")
-        .env("NIT_UPDATE_CACHE_PATH", &cache)
+        .env("GNIT_UPDATE_CHECK_TIMEOUT_SECS", "1")
+        .env("GNIT_UPDATE_CACHE_PATH", &cache)
         .assert()
         .success()
-        .stderr(predicate::str::contains("nit update check unavailable"));
+        .stderr(predicate::str::contains("gnit update check unavailable"));
 
     assert!(!cache.exists(), "failed check should not write cache");
 }
@@ -679,23 +679,23 @@ fn commit_change_and_land_workflow_records_shared_history() {
     )
     .unwrap();
 
-    nit(workspace, ["add", "README.md", "vendor/sdk/lib.rs"]);
-    let commit = nit(workspace, ["commit", "-m", "Update root and sdk"]);
+    gnit(workspace, ["add", "README.md", "vendor/sdk/lib.rs"]);
+    let commit = gnit(workspace, ["commit", "-m", "Update root and sdk"]);
     let change_id = parse_created_change(&commit);
 
     let root_commit = git_out(workspace, ["log", "-1", "--pretty=%B"]);
     let sdk_commit = git_out(&workspace.join("vendor/sdk"), ["log", "-1", "--pretty=%B"]);
-    assert!(root_commit.contains(&format!("Nit-Change-Id: {change_id}")));
-    assert!(sdk_commit.contains(&format!("Nit-Change-Id: {change_id}")));
+    assert!(root_commit.contains(&format!("Gnit-Change-Id: {change_id}")));
+    assert!(sdk_commit.contains(&format!("Gnit-Change-Id: {change_id}")));
 
-    nit(workspace, ["change", "status", &change_id])
+    gnit(workspace, ["change", "status", &change_id])
         .success()
         .stdout(predicate::str::contains("root:"))
         .stdout(predicate::str::contains("sdk:"));
-    nit(workspace, ["change", "show", &change_id])
+    gnit(workspace, ["change", "show", &change_id])
         .success()
         .stdout(predicate::str::contains("Update root and sdk"));
-    nit(workspace, ["change", "log"])
+    gnit(workspace, ["change", "log"])
         .success()
         .stdout(predicate::str::contains(&change_id));
 
@@ -705,12 +705,12 @@ fn commit_change_and_land_workflow_records_shared_history() {
     )
     .unwrap();
     git(&workspace.join("vendor/sdk"), ["add", "lib.rs"]);
-    let duplicate_change_message = format!("Manual follow-up\n\nNit-Change-Id: {change_id}");
+    let duplicate_change_message = format!("Manual follow-up\n\nGnit-Change-Id: {change_id}");
     git(
         &workspace.join("vendor/sdk"),
         ["commit", "-m", &duplicate_change_message],
     );
-    nit(workspace, ["change", "status", &change_id])
+    gnit(workspace, ["change", "status", &change_id])
         .success()
         .stdout(predicate::str::contains("sdk: ambiguous (2 commits)"));
 
@@ -719,21 +719,21 @@ fn commit_change_and_land_workflow_records_shared_history() {
         "pub fn sdk() -> &'static str { \"landed\" }\n",
     )
     .unwrap();
-    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
-    let land = nit(workspace, ["land", "release", "-m", "Land sdk update"]);
+    gnit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    let land = gnit(workspace, ["land", "release", "-m", "Land sdk update"]);
     let landed_change = parse_created_change(&land);
 
-    nit(workspace, ["review", &landed_change])
+    gnit(workspace, ["review", &landed_change])
         .success()
         .stdout(predicate::str::contains("Change"))
         .stdout(predicate::str::contains("Land sdk update"));
-    nit(workspace, ["review", "release"])
+    gnit(workspace, ["review", "release"])
         .success()
         .stdout(predicate::str::contains("Review Pin"))
         .stdout(predicate::str::contains("Changes:"))
         .stdout(predicate::str::contains(&landed_change));
 
-    let pin_paths = std::fs::read_dir(workspace.join(".nit/pins"))
+    let pin_paths = std::fs::read_dir(workspace.join(".gnit/pins"))
         .unwrap()
         .map(|entry| entry.unwrap().path())
         .collect::<Vec<_>>();
@@ -742,7 +742,7 @@ fn commit_change_and_land_workflow_records_shared_history() {
     assert!(pin.contains("label: release"));
     assert!(pin.contains(&landed_change));
 
-    nit(
+    gnit(
         workspace,
         ["pin", "release-copy", "--change", &landed_change],
     )
@@ -769,22 +769,22 @@ fn review_pin_missing_local_commit_prints_actionable_remediation_without_fetchin
     assert_commit_absent(&sdk, &remote_commit);
 
     let pin_id = "PIN-review-remote-only";
-    fs::create_dir_all(workspace.join(".nit/pins")).unwrap();
+    fs::create_dir_all(workspace.join(".gnit/pins")).unwrap();
     fs::write(
-        workspace.join(format!(".nit/pins/{pin_id}.yaml")),
+        workspace.join(format!(".gnit/pins/{pin_id}.yaml")),
         format!(
             "version: 1\nid: {pin_id}\nlabel: review-remote-only\nmembers:\n- id: sdk\n  path: vendor/sdk\n  commit: {remote_commit}\n  branch_hint: master\nprovenance:\n  changes: []\n"
         ),
     )
     .unwrap();
 
-    nit(workspace, ["review", "review-remote-only"])
+    gnit(workspace, ["review", "review-remote-only"])
         .success()
         .stdout(predicate::str::contains("== sdk (vendor/sdk) =="))
         .stdout(predicate::str::contains(format!("commit {remote_commit}")))
         .stdout(predicate::str::contains("commit not available locally"))
         .stdout(predicate::str::contains(
-            "nit checkout PIN-review-remote-only",
+            "gnit checkout PIN-review-remote-only",
         ))
         .stdout(predicate::str::contains("git -C "))
         .stdout(predicate::str::contains("vendor/sdk fetch origin"));
@@ -813,11 +813,11 @@ fn commit_respects_index_and_leaves_unstaged_tracked_changes() {
     fs::write(sdk.join("sdk-staged.txt"), "sdk staged v2\n").unwrap();
     fs::write(sdk.join("sdk-unstaged.txt"), "sdk unstaged v2\n").unwrap();
 
-    nit(
+    gnit(
         workspace,
         ["add", "root-staged.txt", "vendor/sdk/sdk-staged.txt"],
     );
-    nit(workspace, ["commit", "-m", "Commit staged only"]).success();
+    gnit(workspace, ["commit", "-m", "Commit staged only"]).success();
 
     let root_files = git_out(workspace, ["show", "--name-only", "--format=", "HEAD"]);
     assert!(root_files.lines().any(|line| line == "root-staged.txt"));
@@ -864,12 +864,12 @@ fn commit_respects_index_and_leaves_unstaged_tracked_changes() {
 fn commit_rejects_staged_workspace_metadata() {
     let fixture = clean_workspace_with_sdk();
     let workspace = fixture.root.as_path();
-    let roster_path = workspace.join(".nit/roster.yaml");
+    let roster_path = workspace.join(".gnit/roster.yaml");
     let roster = fs::read_to_string(&roster_path).unwrap();
     fs::write(&roster_path, format!("{roster}\n# staged metadata\n")).unwrap();
-    git(workspace, ["add", ".nit/roster.yaml"]);
+    git(workspace, ["add", ".gnit/roster.yaml"]);
 
-    nit(workspace, ["commit", "-m", "Metadata should stay metadata"])
+    gnit(workspace, ["commit", "-m", "Metadata should stay metadata"])
         .failure()
         .stderr(predicate::str::contains("workspace metadata is staged"));
 }
@@ -881,7 +881,7 @@ fn adopt_rejects_plain_subdirectory() {
     // A plain subdirectory of the root repo is not its own repository; adopting
     // it must fail rather than register a non-repo path as a member.
     std::fs::create_dir_all(workspace.join("plainsub")).unwrap();
-    nit(workspace, ["adopt", "plainsub"])
+    gnit(workspace, ["adopt", "plainsub"])
         .failure()
         .stderr(predicate::str::contains("not a repository root"));
 }
@@ -891,15 +891,15 @@ fn ignore_and_doctor_repair_root_excludes() {
     let fixture = clean_workspace_with_sdk();
     let workspace = fixture.root.as_path();
 
-    nit(workspace, ["ignore", "scratch"])
+    gnit(workspace, ["ignore", "scratch"])
         .success()
         .stdout(predicate::str::contains("updated ignored paths"));
-    let roster = std::fs::read_to_string(workspace.join(".nit/roster.yaml")).unwrap();
+    let roster = std::fs::read_to_string(workspace.join(".gnit/roster.yaml")).unwrap();
     assert!(roster.contains("ignored:"));
     assert!(roster.contains("scratch"));
 
     std::fs::write(workspace.join(".git/info/exclude"), "# reset by clone\n").unwrap();
-    nit(workspace, ["doctor"])
+    gnit(workspace, ["doctor"])
         .success()
         .stdout(predicate::str::contains("exclude repair: ok"));
 
@@ -916,14 +916,14 @@ fn invalid_utf8_root_exclude_is_not_overwritten_by_upkeep_or_explicit_repair() {
     let original = b"# user excludes\n*.log\n\xff\n";
     fs::write(&exclude, original).unwrap();
 
-    nit(workspace, ["--verbose", "status"])
+    gnit(workspace, ["--verbose", "status"])
         .success()
         .stderr(predicate::str::contains(
-            "nit upkeep: skipped exclude repair",
+            "gnit upkeep: skipped exclude repair",
         ));
     assert_eq!(fs::read(&exclude).unwrap(), original);
 
-    nit(workspace, ["doctor"])
+    gnit(workspace, ["doctor"])
         .failure()
         .stderr(predicate::str::contains("read git exclude"));
     assert_eq!(fs::read(&exclude).unwrap(), original);
@@ -939,10 +939,10 @@ fn push_and_checkout_workflow_reconstructs_missing_member() {
         "pub fn sdk() -> &'static str { \"pushed\" }\n",
     )
     .unwrap();
-    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
-    nit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
-    nit(workspace, ["push"]).success();
-    nit(workspace, ["push", "--resume"])
+    gnit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    gnit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
+    gnit(workspace, ["push"]).success();
+    gnit(workspace, ["push", "--resume"])
         .success()
         .stdout(predicate::str::contains("member sdk"))
         .stdout(predicate::str::contains("workspace root"))
@@ -963,10 +963,10 @@ fn push_and_checkout_workflow_reconstructs_missing_member() {
 
     let hydrated = fixture._temp.path().join("hydrated");
     let hydrated_path = hydrated.to_str().unwrap();
-    nit(fixture._temp.path(), ["clone", root_remote, hydrated_path])
+    gnit(fixture._temp.path(), ["clone", root_remote, hydrated_path])
         .success()
         .stdout(predicate::str::contains("cloned sdk"))
-        .stdout(predicate::str::contains("cloned Nit workspace"));
+        .stdout(predicate::str::contains("cloned Gnit workspace"));
     assert_eq!(
         std::fs::read_to_string(hydrated.join("vendor/sdk/lib.rs")).unwrap(),
         "pub fn sdk() -> &'static str { \"pushed\" }\n"
@@ -974,7 +974,7 @@ fn push_and_checkout_workflow_reconstructs_missing_member() {
 
     let restored = fixture._temp.path().join("restored");
     let restored_path = restored.to_str().unwrap();
-    nit(
+    gnit(
         fixture._temp.path(),
         ["clone", root_remote, restored_path, "--pin", "baseline"],
     )
@@ -995,10 +995,10 @@ fn push_and_checkout_workflow_reconstructs_missing_member() {
     );
 
     std::fs::write(restored.join("vendor/sdk/lib.rs"), "dirty\n").unwrap();
-    nit(&restored, ["checkout", "baseline"])
+    gnit(&restored, ["checkout", "baseline"])
         .failure()
         .stderr(predicate::str::contains("use --exact to reset it"));
-    nit(&restored, ["checkout", "baseline", "--exact"]).success();
+    gnit(&restored, ["checkout", "baseline", "--exact"]).success();
     assert_eq!(
         std::fs::read_to_string(restored.join("vendor/sdk/lib.rs")).unwrap(),
         "pub fn sdk() -> &'static str { \"pushed\" }\n"
@@ -1013,8 +1013,8 @@ fn push_reports_partial_landing_and_resume_retries_in_order() {
     std::fs::write(workspace.join("sdk/sdk.txt"), "sdk v2\n").unwrap();
     std::fs::write(workspace.join("app/app.txt"), "app v2\n").unwrap();
     std::fs::write(workspace.join("docs/docs.txt"), "docs v2\n").unwrap();
-    nit(workspace, ["add", "-A"]);
-    nit(workspace, ["land", "release", "-m", "Publish v2"]).success();
+    gnit(workspace, ["add", "-A"]);
+    gnit(workspace, ["land", "release", "-m", "Publish v2"]).success();
 
     advance_remote(
         fixture._temp.path(),
@@ -1024,7 +1024,7 @@ fn push_reports_partial_landing_and_resume_retries_in_order() {
         "remote app change\n",
     );
 
-    nit(workspace, ["push"])
+    gnit(workspace, ["push"])
         .failure()
         .stdout(predicate::str::contains("Push report:"))
         .stdout(predicate::str::contains("member sdk"))
@@ -1054,7 +1054,7 @@ fn push_reports_partial_landing_and_resume_retries_in_order() {
     git(&app, ["fetch", "origin", "master"]);
     git(&app, ["merge", "--no-edit", "FETCH_HEAD"]);
 
-    nit(workspace, ["push", "--resume"])
+    gnit(workspace, ["push", "--resume"])
         .success()
         .stdout(predicate::str::contains(
             "resuming ordered push from remote state",
@@ -1094,8 +1094,8 @@ fn push_holds_root_when_pin_commit_was_rewritten_away() {
         "pub fn sdk() -> &'static str { \"pinned\" }\n",
     )
     .unwrap();
-    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
-    nit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
+    gnit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    gnit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
     let pinned = git_out(&sdk, ["rev-parse", "HEAD"]);
 
     git(&sdk, ["reset", "--hard", "HEAD~1"]);
@@ -1107,7 +1107,7 @@ fn push_holds_root_when_pin_commit_was_rewritten_away() {
     git(&sdk, ["add", "lib.rs"]);
     git(&sdk, ["commit", "-m", "Rewrite sdk update"]);
 
-    nit(workspace, ["push"])
+    gnit(workspace, ["push"])
         .failure()
         .stdout(predicate::str::contains("member sdk"))
         .stdout(predicate::str::contains("pushed"))
@@ -1125,11 +1125,11 @@ fn push_holds_root_when_pin_commit_was_rewritten_away() {
     );
 
     remove_pins_with_label(workspace, "baseline");
-    git(workspace, ["add", "-A", ".nit/pins"]);
+    git(workspace, ["add", "-A", ".gnit/pins"]);
     git(workspace, ["commit", "-m", "Remove orphaned pin"]);
-    nit(workspace, ["pin", "recovered"]).success();
+    gnit(workspace, ["pin", "recovered"]).success();
 
-    nit(workspace, ["push", "--resume"])
+    gnit(workspace, ["push", "--resume"])
         .success()
         .stdout(predicate::str::contains("member sdk"))
         .stdout(predicate::str::contains("already landed"))
@@ -1155,8 +1155,8 @@ fn push_allows_historical_pin_reachable_from_origin_side_branch() {
         "pub fn sdk() -> &'static str { \"historical\" }\n",
     )
     .unwrap();
-    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
-    nit(
+    gnit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    gnit(
         workspace,
         [
             "land",
@@ -1170,9 +1170,9 @@ fn push_allows_historical_pin_reachable_from_origin_side_branch() {
     git(&sdk, ["push", "-u", "origin", "HEAD"]);
 
     git(&sdk, ["checkout", "master"]);
-    nit(workspace, ["pin", "current-master"]).success();
+    gnit(workspace, ["pin", "current-master"]).success();
 
-    nit(workspace, ["push"])
+    gnit(workspace, ["push"])
         .success()
         .stdout(predicate::str::contains("member sdk"))
         .stdout(predicate::str::contains("already landed"))
@@ -1186,7 +1186,7 @@ fn push_allows_historical_pin_reachable_from_origin_side_branch() {
     );
 
     let restored = fixture._temp.path().join("restored-side-branch-pin");
-    nit(
+    gnit(
         fixture._temp.path(),
         [
             "clone",
@@ -1220,8 +1220,8 @@ fn push_holds_root_for_pin_reachable_only_from_local_branch() {
         "pub fn sdk() -> &'static str { \"local-only\" }\n",
     )
     .unwrap();
-    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
-    nit(
+    gnit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    gnit(
         workspace,
         [
             "land",
@@ -1234,9 +1234,9 @@ fn push_holds_root_for_pin_reachable_only_from_local_branch() {
     let pinned = git_out(&sdk, ["rev-parse", "HEAD"]);
 
     git(&sdk, ["checkout", "master"]);
-    nit(workspace, ["pin", "current-master"]).success();
+    gnit(workspace, ["pin", "current-master"]).success();
 
-    nit(workspace, ["push"])
+    gnit(workspace, ["push"])
         .failure()
         .stdout(predicate::str::contains("member sdk"))
         .stdout(predicate::str::contains("already landed"))
@@ -1277,16 +1277,16 @@ fn pr_open_creates_linked_draft_prs_and_rerun_does_not_duplicate() {
     fs::write(workspace.join("README.md"), "root pr flow\n").unwrap();
     fs::write(workspace.join("sdk/sdk.txt"), "sdk pr flow\n").unwrap();
     fs::write(workspace.join("app/app.txt"), "app pr flow\n").unwrap();
-    nit(
+    gnit(
         workspace,
         ["add", "README.md", "sdk/sdk.txt", "app/app.txt"],
     );
-    let land = nit(
+    let land = gnit(
         workspace,
         ["land", "review-pin", "-m", "Add linked PR flow"],
     );
     let change_id = parse_created_change(&land);
-    nit(workspace, ["push"]).success();
+    gnit(workspace, ["push"]).success();
 
     let gh = fake_gh();
     gh.command(workspace, ["pr", "open"])
@@ -1304,7 +1304,7 @@ fn pr_open_creates_linked_draft_prs_and_rerun_does_not_duplicate() {
     assert!(prs.iter().all(|pr| pr["draft"] == true));
     for pr in prs {
         let body = pr["body"].as_str().unwrap();
-        assert!(body.contains(&format!("Nit-Change-Id: {change_id}")));
+        assert!(body.contains(&format!("Gnit-Change-Id: {change_id}")));
         assert!(body.contains("acme/root#"));
         assert!(body.contains("acme/sdk#"));
         assert!(body.contains("acme/app#"));
@@ -1338,10 +1338,10 @@ fn pr_open_member_only_change_creates_only_member_pr() {
         "pub fn sdk() -> &'static str { \"pr\" }\n",
     )
     .unwrap();
-    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
-    let commit = nit(workspace, ["commit", "-m", "Update SDK API"]);
+    gnit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    let commit = gnit(workspace, ["commit", "-m", "Update SDK API"]);
     let change_id = parse_created_change(&commit);
-    nit(workspace, ["push"]).success();
+    gnit(workspace, ["push"]).success();
 
     let gh = fake_gh();
     gh.command(workspace, ["pr", "open"])
@@ -1371,10 +1371,10 @@ fn pr_open_adopts_manual_pr_and_preserves_body_text() {
         "pub fn sdk() -> &'static str { \"manual\" }\n",
     )
     .unwrap();
-    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
-    let commit = nit(workspace, ["commit", "-m", "Update manual PR"]);
+    gnit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    let commit = gnit(workspace, ["commit", "-m", "Update manual PR"]);
     let change_id = parse_created_change(&commit);
-    nit(workspace, ["push"]).success();
+    gnit(workspace, ["push"]).success();
 
     let gh = fake_gh();
     gh.write_state(json!({
@@ -1401,7 +1401,7 @@ fn pr_open_adopts_manual_pr_and_preserves_body_text() {
     assert_eq!(prs.len(), 1, "{state}");
     let body = prs[0]["body"].as_str().unwrap();
     assert!(body.contains("Manual text stays."));
-    assert!(body.contains(&format!("Nit-Change-Id: {change_id}")));
+    assert!(body.contains(&format!("Gnit-Change-Id: {change_id}")));
 }
 
 #[cfg(unix)]
@@ -1418,8 +1418,8 @@ fn pr_open_blocks_when_remote_branch_is_missing() {
         "pub fn sdk() -> &'static str { \"unpushed\" }\n",
     )
     .unwrap();
-    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
-    let commit = nit(workspace, ["commit", "-m", "Update unpushed SDK"]);
+    gnit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    let commit = gnit(workspace, ["commit", "-m", "Update unpushed SDK"]);
     let change_id = parse_created_change(&commit);
 
     fake_gh()
@@ -1429,7 +1429,7 @@ fn pr_open_blocks_when_remote_branch_is_missing() {
         .stderr(predicate::str::contains(
             "pr open blocked before creating PRs",
         ))
-        .stderr(predicate::str::contains("nit push"));
+        .stderr(predicate::str::contains("gnit push"));
 }
 
 #[cfg(unix)]
@@ -1446,13 +1446,14 @@ fn pr_open_blocks_ambiguous_duplicate_markers() {
         "pub fn sdk() -> &'static str { \"duplicate\" }\n",
     )
     .unwrap();
-    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
-    let commit = nit(workspace, ["commit", "-m", "Update duplicate PR"]);
+    gnit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    let commit = gnit(workspace, ["commit", "-m", "Update duplicate PR"]);
     let change_id = parse_created_change(&commit);
-    nit(workspace, ["push"]).success();
+    gnit(workspace, ["push"]).success();
 
-    let marker =
-        format!("<!-- nit-pr-sync:start -->\nNit-Change-Id: {change_id}\n<!-- nit-pr-sync:end -->");
+    let marker = format!(
+        "<!-- gnit-pr-sync:start -->\nGnit-Change-Id: {change_id}\n<!-- gnit-pr-sync:end -->"
+    );
     let gh = fake_gh();
     gh.write_state(json!({
         "next": 3,
@@ -1500,12 +1501,12 @@ fn pr_status_degrades_when_gh_is_offline() {
         "pub fn sdk() -> &'static str { \"offline\" }\n",
     )
     .unwrap();
-    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
-    let commit = nit(workspace, ["commit", "-m", "Update offline SDK"]);
+    gnit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    let commit = gnit(workspace, ["commit", "-m", "Update offline SDK"]);
     let change_id = parse_created_change(&commit);
 
-    let mut cmd = nit_command(workspace, ["pr", "--change", &change_id]);
-    cmd.env("NIT_GH_BIN", workspace.join("missing-gh"))
+    let mut cmd = gnit_command(workspace, ["pr", "--change", &change_id]);
+    cmd.env("GNIT_GH_BIN", workspace.join("missing-gh"))
         .assert()
         .success()
         .stdout(predicate::str::contains("Workspace change"))
@@ -1522,7 +1523,7 @@ fn pr_open_resumes_after_partial_create_failure() {
 
     let mut first = gh.command(workspace, ["pr", "open", "--change", &change_id]);
     first
-        .env("NIT_FAKE_GH_FAIL_CREATE_REPO", "acme/app")
+        .env("GNIT_FAKE_GH_FAIL_CREATE_REPO", "acme/app")
         .assert()
         .failure()
         .stderr(predicate::str::contains("pr open incomplete"));
@@ -1550,8 +1551,9 @@ fn pr_open_resumes_after_partial_create_failure() {
 fn pr_status_shows_mixed_states_and_checks() {
     let (fixture, change_id) = three_repo_pr_change();
     let workspace = fixture.root.as_path();
-    let marker =
-        format!("<!-- nit-pr-sync:start -->\nNit-Change-Id: {change_id}\n<!-- nit-pr-sync:end -->");
+    let marker = format!(
+        "<!-- gnit-pr-sync:start -->\nGnit-Change-Id: {change_id}\n<!-- gnit-pr-sync:end -->"
+    );
     let gh = fake_gh();
     gh.write_state(json!({
         "next": 4,
@@ -1620,11 +1622,11 @@ fn pr_open_preflight_failure_does_not_create_any_prs() {
     fs::write(workspace.join("README.md"), "root not pushed\n").unwrap();
     fs::write(workspace.join("sdk/sdk.txt"), "sdk not pushed\n").unwrap();
     fs::write(workspace.join("app/app.txt"), "app not pushed\n").unwrap();
-    nit(
+    gnit(
         workspace,
         ["add", "README.md", "sdk/sdk.txt", "app/app.txt"],
     );
-    let land = nit(workspace, ["land", "review-pin", "-m", "Add unpushed flow"]);
+    let land = gnit(workspace, ["land", "review-pin", "-m", "Add unpushed flow"]);
     let change_id = parse_created_change(&land);
 
     let gh = fake_gh();
@@ -1634,7 +1636,7 @@ fn pr_open_preflight_failure_does_not_create_any_prs() {
         .stderr(predicate::str::contains(
             "pr open blocked before creating PRs",
         ))
-        .stderr(predicate::str::contains("run `nit push`"));
+        .stderr(predicate::str::contains("run `gnit push`"));
 
     let state = gh.state();
     assert_eq!(state["prs"].as_array().unwrap().len(), 0, "{state}");
@@ -1659,7 +1661,7 @@ fn pr_open_resumes_after_body_edit_failure() {
 
     let mut first = gh.command(workspace, ["pr", "open", "--change", &change_id]);
     first
-        .env("NIT_FAKE_GH_FAIL_EDIT_REPO", "acme/app")
+        .env("GNIT_FAKE_GH_FAIL_EDIT_REPO", "acme/app")
         .assert()
         .failure()
         .stderr(predicate::str::contains("pr body update incomplete"))
@@ -1705,13 +1707,13 @@ fn pr_open_replaces_marker_once_and_preserves_author_text() {
         "pub fn sdk() -> &'static str { \"replace\" }\n",
     )
     .unwrap();
-    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
-    let commit = nit(workspace, ["commit", "-m", "Update marker body"]);
+    gnit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    let commit = gnit(workspace, ["commit", "-m", "Update marker body"]);
     let change_id = parse_created_change(&commit);
-    nit(workspace, ["push"]).success();
+    gnit(workspace, ["push"]).success();
 
     let old_body = format!(
-        "Intro stays.\n\n<!-- nit-pr-sync:start -->\nNit-Change-Id: {change_id}\nOld: remove me\n<!-- nit-pr-sync:end -->\n\nFooter stays."
+        "Intro stays.\n\n<!-- gnit-pr-sync:start -->\nGnit-Change-Id: {change_id}\nOld: remove me\n<!-- gnit-pr-sync:end -->\n\nFooter stays."
     );
     let gh = fake_gh();
     gh.write_state(json!({
@@ -1739,12 +1741,12 @@ fn pr_open_replaces_marker_once_and_preserves_author_text() {
     assert!(body.contains("Footer stays."), "{body}");
     assert!(!body.contains("Old: remove me"), "{body}");
     assert_eq!(
-        body.matches("<!-- nit-pr-sync:start -->").count(),
+        body.matches("<!-- gnit-pr-sync:start -->").count(),
         1,
         "{body}"
     );
     assert_eq!(
-        body.matches("<!-- nit-pr-sync:end -->").count(),
+        body.matches("<!-- gnit-pr-sync:end -->").count(),
         1,
         "{body}"
     );
@@ -1765,9 +1767,9 @@ fn pr_open_ready_creates_non_draft_prs() {
         "pub fn sdk() -> &'static str { \"ready\" }\n",
     )
     .unwrap();
-    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
-    nit(workspace, ["commit", "-m", "Update ready PR"]);
-    nit(workspace, ["push"]).success();
+    gnit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    gnit(workspace, ["commit", "-m", "Update ready PR"]);
+    gnit(workspace, ["push"]).success();
 
     let gh = fake_gh();
     gh.command(workspace, ["pr", "open", "--ready"])
@@ -1802,17 +1804,17 @@ fn push_ignores_retained_pins_for_retired_missing_members() {
     let workspace = fixture.root.as_path();
     let sdk = workspace.join("vendor/sdk");
 
-    nit(workspace, ["pin", "baseline"]).success();
+    gnit(workspace, ["pin", "baseline"]).success();
     std::fs::write(
-        workspace.join(".nit/roster.yaml"),
+        workspace.join(".gnit/roster.yaml"),
         "version: 1\nmode: shared\nmembers: []\n",
     )
     .unwrap();
-    git(workspace, ["add", ".nit/roster.yaml"]);
+    git(workspace, ["add", ".gnit/roster.yaml"]);
     git(workspace, ["commit", "-m", "Retire sdk"]);
     std::fs::remove_dir_all(&sdk).unwrap();
 
-    nit(workspace, ["push"])
+    gnit(workspace, ["push"])
         .success()
         .stdout(predicate::str::contains("workspace root"))
         .stdout(predicate::str::contains("pushed"))
@@ -1834,14 +1836,14 @@ fn checkout_recreates_local_branch_from_remote_pin_hint() {
         "pub fn sdk() -> &'static str { \"branch-aware\" }\n",
     )
     .unwrap();
-    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
-    nit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
-    nit(workspace, ["push"]).success();
+    gnit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    gnit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
+    gnit(workspace, ["push"]).success();
 
     let root_remote = fixture.root_remote.to_str().unwrap();
     let restored = fixture._temp.path().join("branch-restored");
     let restored_path = restored.to_str().unwrap();
-    nit(
+    gnit(
         fixture._temp.path(),
         ["clone", root_remote, restored_path, "--pin", "baseline"],
     )
@@ -1851,7 +1853,7 @@ fn checkout_recreates_local_branch_from_remote_pin_hint() {
     git(&sdk, ["checkout", "--detach", "HEAD"]);
     git(&sdk, ["branch", "-D", "master"]);
 
-    nit(&restored, ["checkout", "baseline"])
+    gnit(&restored, ["checkout", "baseline"])
         .success()
         .stdout(predicate::str::contains("on master"));
     assert_eq!(
@@ -1870,14 +1872,14 @@ fn checkout_prefers_hinted_remote_branch_over_other_local_branch_at_commit() {
         "pub fn sdk() -> &'static str { \"hinted\" }\n",
     )
     .unwrap();
-    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
-    nit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
-    nit(workspace, ["push"]).success();
+    gnit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    gnit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
+    gnit(workspace, ["push"]).success();
 
     let root_remote = fixture.root_remote.to_str().unwrap();
     let restored = fixture._temp.path().join("hint-restored");
     let restored_path = restored.to_str().unwrap();
-    nit(
+    gnit(
         fixture._temp.path(),
         ["clone", root_remote, restored_path, "--pin", "baseline"],
     )
@@ -1887,7 +1889,7 @@ fn checkout_prefers_hinted_remote_branch_over_other_local_branch_at_commit() {
     git(&sdk, ["checkout", "-b", "topic"]);
     git(&sdk, ["branch", "-D", "master"]);
 
-    nit(&restored, ["checkout", "baseline"])
+    gnit(&restored, ["checkout", "baseline"])
         .success()
         .stdout(predicate::str::contains("on master"));
     assert_eq!(
@@ -1906,20 +1908,20 @@ fn checkout_fast_forwards_existing_local_branch_to_remote_pin_hint() {
         "pub fn sdk() -> &'static str { \"fast-forward\" }\n",
     )
     .unwrap();
-    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
-    nit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
-    nit(workspace, ["push"]).success();
+    gnit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    gnit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
+    gnit(workspace, ["push"]).success();
 
     let root_remote = fixture.root_remote.to_str().unwrap();
     let restored = fixture._temp.path().join("ff-restored");
     let restored_path = restored.to_str().unwrap();
-    nit(fixture._temp.path(), ["clone", root_remote, restored_path]).success();
+    gnit(fixture._temp.path(), ["clone", root_remote, restored_path]).success();
 
     let sdk = restored.join("vendor/sdk");
     let remote_head = git_out(&sdk, ["rev-parse", "origin/master"]);
     git(&sdk, ["reset", "--hard", "HEAD~1"]);
 
-    nit(&restored, ["checkout", "baseline"])
+    gnit(&restored, ["checkout", "baseline"])
         .success()
         .stdout(predicate::str::contains("on master"));
     assert_eq!(git_out(&sdk, ["rev-parse", "master"]), remote_head);
@@ -1936,7 +1938,7 @@ fn checkout_detaches_without_repointing_ahead_branch_by_default() {
     let sdk = workspace.join("vendor/sdk");
 
     let baseline_head = git_out(&sdk, ["rev-parse", "HEAD"]);
-    nit(workspace, ["pin", "baseline"]).success();
+    gnit(workspace, ["pin", "baseline"]).success();
 
     std::fs::write(
         sdk.join("lib.rs"),
@@ -1947,7 +1949,7 @@ fn checkout_detaches_without_repointing_ahead_branch_by_default() {
     git(&sdk, ["commit", "-m", "Ahead sdk"]);
     let branch_head = git_out(&sdk, ["rev-parse", "master"]);
 
-    nit(workspace, ["checkout", "baseline"])
+    gnit(workspace, ["checkout", "baseline"])
         .success()
         .stderr(predicate::str::contains("detached"));
 
@@ -1969,14 +1971,14 @@ fn checkout_detaches_when_hinted_remote_cannot_fast_forward_local_branch() {
         "pub fn sdk() -> &'static str { \"remote\" }\n",
     )
     .unwrap();
-    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
-    nit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
-    nit(workspace, ["push"]).success();
+    gnit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    gnit(workspace, ["land", "baseline", "-m", "Publish sdk update"]).success();
+    gnit(workspace, ["push"]).success();
 
     let root_remote = fixture.root_remote.to_str().unwrap();
     let restored = fixture._temp.path().join("diverged-restored");
     let restored_path = restored.to_str().unwrap();
-    nit(fixture._temp.path(), ["clone", root_remote, restored_path]).success();
+    gnit(fixture._temp.path(), ["clone", root_remote, restored_path]).success();
 
     let sdk = restored.join("vendor/sdk");
     let pinned_head = git_out(&sdk, ["rev-parse", "origin/master"]);
@@ -1990,7 +1992,7 @@ fn checkout_detaches_when_hinted_remote_cannot_fast_forward_local_branch() {
     git(&sdk, ["commit", "-m", "Diverged sdk"]);
     let branch_head = git_out(&sdk, ["rev-parse", "master"]);
 
-    nit(&restored, ["checkout", "baseline"])
+    gnit(&restored, ["checkout", "baseline"])
         .success()
         .stderr(predicate::str::contains("cannot fast-forward"));
 
@@ -2009,7 +2011,7 @@ fn exact_checkout_detaches_without_repointing_current_branch() {
     let sdk = workspace.join("vendor/sdk");
 
     let baseline_head = git_out(&sdk, ["rev-parse", "HEAD"]);
-    nit(workspace, ["pin", "baseline"]).success();
+    gnit(workspace, ["pin", "baseline"]).success();
 
     std::fs::write(
         sdk.join("lib.rs"),
@@ -2020,7 +2022,7 @@ fn exact_checkout_detaches_without_repointing_current_branch() {
     git(&sdk, ["commit", "-m", "Later sdk"]);
     let branch_head = git_out(&sdk, ["rev-parse", "master"]);
 
-    nit(workspace, ["checkout", "baseline", "--exact"])
+    gnit(workspace, ["checkout", "baseline", "--exact"])
         .success()
         .stderr(predicate::str::contains("detached"));
 
@@ -2038,8 +2040,11 @@ fn import_submodule_workflow_converts_gitlink_to_member() {
     let workspace = temp.path().join("workspace");
     std::fs::create_dir(&workspace).unwrap();
     git_init(&workspace);
-    git(&workspace, ["config", "user.email", "nit-test@example.com"]);
-    git(&workspace, ["config", "user.name", "Nit Test"]);
+    git(
+        &workspace,
+        ["config", "user.email", "gnit-test@example.com"],
+    );
+    git(&workspace, ["config", "user.name", "Gnit Test"]);
     std::fs::write(workspace.join("README.md"), "root\n").unwrap();
     git(&workspace, ["add", "README.md"]);
     git(&workspace, ["commit", "-m", "Initial root"]);
@@ -2049,9 +2054,9 @@ fn import_submodule_workflow_converts_gitlink_to_member() {
     git_init(&sub_source);
     git(
         &sub_source,
-        ["config", "user.email", "nit-test@example.com"],
+        ["config", "user.email", "gnit-test@example.com"],
     );
-    git(&sub_source, ["config", "user.name", "Nit Test"]);
+    git(&sub_source, ["config", "user.name", "Gnit Test"]);
     std::fs::write(sub_source.join("lib.rs"), "pub fn sub() {}\n").unwrap();
     git(&sub_source, ["add", "lib.rs"]);
     git(&sub_source, ["commit", "-m", "Initial sub"]);
@@ -2073,15 +2078,15 @@ fn import_submodule_workflow_converts_gitlink_to_member() {
         "fixture should start with a gitlink"
     );
 
-    nit(&workspace, ["init"]).success();
-    nit(
+    gnit(&workspace, ["init"]).success();
+    gnit(
         &workspace,
         ["import-submodule", "vendor/sub", "--id", "sub"],
     )
     .success()
     .stdout(predicate::str::contains("imported submodule vendor/sub"));
 
-    let roster = std::fs::read_to_string(workspace.join(".nit/roster.yaml")).unwrap();
+    let roster = std::fs::read_to_string(workspace.join(".gnit/roster.yaml")).unwrap();
     assert!(roster.contains("id: sub"));
     assert!(roster.contains("path: vendor/sub"));
     assert!(roster.contains(sub_source.to_str().unwrap()));
@@ -2094,7 +2099,7 @@ fn import_submodule_workflow_converts_gitlink_to_member() {
     let modules = std::fs::read_to_string(workspace.join(".gitmodules")).unwrap_or_default();
     assert!(!modules.contains("vendor/sub"));
     let last_commit = git_out(&workspace, ["log", "-1", "--pretty=%s"]);
-    assert_eq!(last_commit.trim(), "Import Nit member vendor/sub");
+    assert_eq!(last_commit.trim(), "Import Gnit member vendor/sub");
 }
 
 #[test]
@@ -2105,7 +2110,7 @@ fn status_reports_member_state_and_discovered() {
     std::fs::create_dir_all(ws.join("scratch")).unwrap();
     git_init(&ws.join("scratch"));
 
-    nit(ws, ["status"])
+    gnit(ws, ["status"])
         .success()
         .stdout(predicate::str::contains("sdk"))
         .stdout(predicate::str::contains("untracked"))
@@ -2118,12 +2123,12 @@ fn log_interleaves_changes_and_pins() {
     let fixture = clean_workspace_with_sdk();
     let ws = fixture.root.as_path();
     std::fs::write(ws.join("vendor/sdk/lib.rs"), "pub fn v() {}\n").unwrap();
-    nit(ws, ["add", "vendor/sdk/lib.rs"]);
-    nit(ws, ["land", "release", "-m", "Ship it"]).success();
+    gnit(ws, ["add", "vendor/sdk/lib.rs"]);
+    gnit(ws, ["land", "release", "-m", "Ship it"]).success();
 
-    nit(ws, ["log"])
+    gnit(ws, ["log"])
         .success()
-        .stdout(predicate::str::contains("change NCH-"))
+        .stdout(predicate::str::contains("change GCH-"))
         .stdout(predicate::str::contains("pin    release"));
 }
 
@@ -2141,7 +2146,7 @@ fn upkeep_restores_missing_local_exclude() {
     std::fs::write(&exclude, stripped).unwrap();
 
     // Any command runs transparent upkeep, which restores the local exclude.
-    nit(ws, ["status"]).success();
+    gnit(ws, ["status"]).success();
     let restored = std::fs::read_to_string(&exclude).unwrap();
     assert!(
         restored.lines().any(|line| line == "vendor/sdk"),
@@ -2158,7 +2163,7 @@ fn status_includes_dirty_root_repo() {
     git(ws, ["add", "root_change.txt"]);
     std::fs::write(ws.join("root_untracked.txt"), "y\n").unwrap();
 
-    let output = nit_output(ws, ["status"]);
+    let output = gnit_output(ws, ["status"]);
     let root_line = output
         .lines()
         .find(|line| line.trim_start().starts_with("root"))
@@ -2180,38 +2185,38 @@ fn status_includes_dirty_root_repo() {
 // ---- Error-contract sweep ---------------------------------------------------
 // Deterministic, no-network coverage of the CLI's `bail!` surface: argument
 // validation, "outside a workspace", and unknown-id handling. These guard the
-// promises Nit makes in its error messages, which agents and scripts depend on.
+// promises Gnit makes in its error messages, which agents and scripts depend on.
 
 #[test]
 fn add_rejects_all_combined_with_paths() {
     let fixture = clean_workspace_with_sdk();
-    nit(fixture.root.as_path(), ["add", "-A", "README.md"])
+    gnit(fixture.root.as_path(), ["add", "-A", "README.md"])
         .failure()
         .stderr(predicate::str::contains(
-            "use either `nit add -A` or explicit paths, not both",
+            "use either `gnit add -A` or explicit paths, not both",
         ));
 }
 
 #[test]
 fn add_requires_paths_or_all() {
     let fixture = clean_workspace_with_sdk();
-    nit(fixture.root.as_path(), ["add"])
+    gnit(fixture.root.as_path(), ["add"])
         .failure()
         .stderr(predicate::str::contains("nothing specified"));
 }
 
 #[test]
 fn add_outside_workspace_is_rejected() {
-    let temp = tempdir_without_nit_ancestor();
-    nit(temp.path(), ["add", "README.md"])
+    let temp = tempdir_without_gnit_ancestor();
+    gnit(temp.path(), ["add", "README.md"])
         .failure()
-        .stderr(predicate::str::contains("not in a Nit workspace"));
+        .stderr(predicate::str::contains("not in a Gnit workspace"));
 }
 
 #[test]
 fn commit_without_staged_changes_is_rejected() {
     let fixture = clean_workspace_with_sdk();
-    nit(fixture.root.as_path(), ["commit", "-m", "nothing here"])
+    gnit(fixture.root.as_path(), ["commit", "-m", "nothing here"])
         .failure()
         .stderr(predicate::str::contains("no staged changes to commit"));
 }
@@ -2219,9 +2224,9 @@ fn commit_without_staged_changes_is_rejected() {
 #[test]
 fn init_in_existing_workspace_is_rejected() {
     let fixture = clean_workspace_with_sdk();
-    nit(fixture.root.as_path(), ["init"])
+    gnit(fixture.root.as_path(), ["init"])
         .failure()
-        .stderr(predicate::str::contains("Nit workspace already exists"));
+        .stderr(predicate::str::contains("Gnit workspace already exists"));
 }
 
 #[test]
@@ -2235,7 +2240,7 @@ fn adopt_duplicate_id_is_rejected() {
     git(&other, ["add", "f.txt"]);
     git(&other, ["commit", "-m", "Initial other"]);
 
-    nit(ws, ["adopt", "vendor/other", "--id", "sdk"])
+    gnit(ws, ["adopt", "vendor/other", "--id", "sdk"])
         .failure()
         .stderr(predicate::str::contains("member id sdk already exists"));
 }
@@ -2252,7 +2257,7 @@ fn adopt_id_with_multiple_paths_is_rejected() {
         git(&member, ["add", "f.txt"]);
         git(&member, ["commit", "-m", "Initial member"]);
     }
-    nit(ws, ["adopt", "vendor/a", "vendor/b", "--id", "x"])
+    gnit(ws, ["adopt", "vendor/a", "vendor/b", "--id", "x"])
         .failure()
         .stderr(predicate::str::contains(
             "--id can only be used when adopting one path",
@@ -2265,7 +2270,7 @@ fn clone_into_existing_target_is_rejected() {
     let root_remote = fixture.root_remote.to_str().unwrap();
     let target = fixture._temp.path().join("occupied");
     std::fs::create_dir_all(&target).unwrap();
-    nit(
+    gnit(
         fixture._temp.path(),
         ["clone", root_remote, target.to_str().unwrap()],
     )
@@ -2276,7 +2281,7 @@ fn clone_into_existing_target_is_rejected() {
 #[test]
 fn checkout_unknown_pin_is_rejected() {
     let fixture = clean_workspace_with_sdk();
-    nit(fixture.root.as_path(), ["checkout", "nonesuch"])
+    gnit(fixture.root.as_path(), ["checkout", "nonesuch"])
         .failure()
         .stderr(predicate::str::contains("pin nonesuch not found"));
 }
@@ -2284,7 +2289,7 @@ fn checkout_unknown_pin_is_rejected() {
 #[test]
 fn pin_with_no_members_is_rejected() {
     let fixture = empty_workspace();
-    nit(fixture.root.as_path(), ["pin", "baseline"])
+    gnit(fixture.root.as_path(), ["pin", "baseline"])
         .failure()
         .stderr(predicate::str::contains(
             "cannot pin a workspace with no members",
@@ -2294,9 +2299,9 @@ fn pin_with_no_members_is_rejected() {
 #[test]
 fn change_show_unknown_is_rejected() {
     let fixture = clean_workspace_with_sdk();
-    nit(
+    gnit(
         fixture.root.as_path(),
-        ["change", "show", "NCH-does-not-exist"],
+        ["change", "show", "GCH-does-not-exist"],
     )
     .failure()
     .stderr(predicate::str::contains("not found"));
@@ -2305,9 +2310,9 @@ fn change_show_unknown_is_rejected() {
 #[test]
 fn change_diff_unknown_is_rejected() {
     let fixture = clean_workspace_with_sdk();
-    nit(
+    gnit(
         fixture.root.as_path(),
-        ["change", "diff", "NCH-does-not-exist"],
+        ["change", "diff", "GCH-does-not-exist"],
     )
     .failure()
     .stderr(predicate::str::contains("not found"));
@@ -2318,7 +2323,7 @@ fn push_rejects_detached_member() {
     let fixture = workspace_with_remotes();
     let ws = fixture.root.as_path();
     git(&ws.join("vendor/sdk"), ["checkout", "--detach", "HEAD"]);
-    nit(ws, ["push"])
+    gnit(ws, ["push"])
         .failure()
         .stdout(predicate::str::contains("member sdk"))
         .stdout(predicate::str::contains(
@@ -2348,11 +2353,11 @@ fn change_diff_shows_per_repo_diffs() {
     let fixture = clean_workspace_with_sdk();
     let ws = fixture.root.as_path();
     std::fs::write(ws.join("vendor/sdk/lib.rs"), "pub fn sdk() -> u8 { 7 }\n").unwrap();
-    nit(ws, ["add", "vendor/sdk/lib.rs"]);
-    let commit = nit(ws, ["commit", "-m", "Tweak sdk"]);
+    gnit(ws, ["add", "vendor/sdk/lib.rs"]);
+    let commit = gnit(ws, ["commit", "-m", "Tweak sdk"]);
     let change_id = parse_created_change(&commit);
 
-    nit(ws, ["change", "diff", &change_id])
+    gnit(ws, ["change", "diff", &change_id])
         .success()
         .stdout(predicate::str::contains(format!("Change {change_id}")))
         .stdout(predicate::str::contains("== sdk"))
@@ -2367,7 +2372,7 @@ fn doctor_reports_missing_member() {
     let fixture = clean_workspace_with_sdk();
     let ws = fixture.root.as_path();
     std::fs::remove_dir_all(ws.join("vendor/sdk")).unwrap();
-    nit(ws, ["doctor"])
+    gnit(ws, ["doctor"])
         .success()
         .stdout(predicate::str::contains("member sdk: missing"));
 }
@@ -2385,7 +2390,7 @@ fn doctor_reports_remote_drift() {
             "https://example.invalid/moved.git",
         ],
     );
-    nit(ws, ["doctor"])
+    gnit(ws, ["doctor"])
         .success()
         .stdout(predicate::str::contains("member sdk: remote drift"));
 }
@@ -2472,14 +2477,14 @@ fn git_base_command() -> std::process::Command {
         ])
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_SYSTEM", "/dev/null")
-        .env("GIT_AUTHOR_NAME", "Nit Test")
-        .env("GIT_AUTHOR_EMAIL", "nit-test@example.com")
-        .env("GIT_COMMITTER_NAME", "Nit Test")
-        .env("GIT_COMMITTER_EMAIL", "nit-test@example.com");
+        .env("GIT_AUTHOR_NAME", "Gnit Test")
+        .env("GIT_AUTHOR_EMAIL", "gnit-test@example.com")
+        .env("GIT_COMMITTER_NAME", "Gnit Test")
+        .env("GIT_COMMITTER_EMAIL", "gnit-test@example.com");
     command
 }
 
-fn tempdir_without_nit_ancestor() -> tempfile::TempDir {
+fn tempdir_without_gnit_ancestor() -> tempfile::TempDir {
     let mut candidates = Vec::new();
     if let Ok(cwd) = std::env::current_dir() {
         if let Some(parent) = cwd.parent() {
@@ -2491,34 +2496,34 @@ fn tempdir_without_nit_ancestor() -> tempfile::TempDir {
     candidates.push(PathBuf::from("/tmp"));
 
     for base in candidates {
-        if !base.is_dir() || has_nit_ancestor(&base) {
+        if !base.is_dir() || has_gnit_ancestor(&base) {
             continue;
         }
         for _ in 0..8 {
             if let Ok(temp) = tempfile::Builder::new()
-                .prefix("nit-outside-workspace-")
+                .prefix("gnit-outside-workspace-")
                 .tempdir_in(&base)
             {
-                if !has_nit_ancestor(temp.path()) {
+                if !has_gnit_ancestor(temp.path()) {
                     return temp;
                 }
             }
         }
     }
 
-    panic!("could not create a tempdir without a .nit ancestor");
+    panic!("could not create a tempdir without a .gnit ancestor");
 }
 
-fn has_nit_ancestor(path: &Path) -> bool {
+fn has_gnit_ancestor(path: &Path) -> bool {
     path.ancestors()
-        .any(|ancestor| ancestor.join(".nit").exists())
+        .any(|ancestor| ancestor.join(".gnit").exists())
 }
 
-fn nit_output<const N: usize>(dir: &Path, args: [&str; N]) -> String {
-    let output = nit_command(dir, args).output().unwrap();
+fn gnit_output<const N: usize>(dir: &Path, args: [&str; N]) -> String {
+    let output = gnit_command(dir, args).output().unwrap();
     assert!(
         output.status.success(),
-        "nit {:?} failed in {}: {}",
+        "gnit {:?} failed in {}: {}",
         args,
         dir.display(),
         String::from_utf8_lossy(&output.stderr)
@@ -2530,8 +2535,8 @@ fn clean_workspace_with_sdk() -> Fixture {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().to_path_buf();
     git_init(&root);
-    git(&root, ["config", "user.email", "nit-test@example.com"]);
-    git(&root, ["config", "user.name", "Nit Test"]);
+    git(&root, ["config", "user.email", "gnit-test@example.com"]);
+    git(&root, ["config", "user.name", "Gnit Test"]);
     std::fs::write(root.join("README.md"), "root\n").unwrap();
     git(&root, ["add", "README.md"]);
     git(&root, ["commit", "-m", "Initial root"]);
@@ -2540,18 +2545,18 @@ fn clean_workspace_with_sdk() -> Fixture {
     git_init(&root.join("vendor/sdk"));
     git(
         &root.join("vendor/sdk"),
-        ["config", "user.email", "nit-test@example.com"],
+        ["config", "user.email", "gnit-test@example.com"],
     );
     git(
         &root.join("vendor/sdk"),
-        ["config", "user.name", "Nit Test"],
+        ["config", "user.name", "Gnit Test"],
     );
     std::fs::write(root.join("vendor/sdk/lib.rs"), "pub fn sdk() {}\n").unwrap();
     git(&root.join("vendor/sdk"), ["add", "lib.rs"]);
     git(&root.join("vendor/sdk"), ["commit", "-m", "Initial sdk"]);
 
-    nit(&root, ["init"]);
-    nit(&root, ["adopt", "vendor/sdk", "--id", "sdk"]);
+    gnit(&root, ["init"]);
+    gnit(&root, ["adopt", "vendor/sdk", "--id", "sdk"]);
 
     Fixture { _temp: temp, root }
 }
@@ -2560,13 +2565,13 @@ fn empty_workspace() -> Fixture {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().to_path_buf();
     git_init(&root);
-    git(&root, ["config", "user.email", "nit-test@example.com"]);
-    git(&root, ["config", "user.name", "Nit Test"]);
+    git(&root, ["config", "user.email", "gnit-test@example.com"]);
+    git(&root, ["config", "user.name", "Gnit Test"]);
     std::fs::write(root.join("README.md"), "root\n").unwrap();
     git(&root, ["add", "README.md"]);
     git(&root, ["commit", "-m", "Initial root"]);
 
-    nit(&root, ["init"]);
+    gnit(&root, ["init"]);
 
     Fixture { _temp: temp, root }
 }
@@ -2589,8 +2594,8 @@ fn workspace_with_remotes() -> RemoteFixture {
     let root = temp.path().join("workspace");
     std::fs::create_dir(&root).unwrap();
     git_init(&root);
-    git(&root, ["config", "user.email", "nit-test@example.com"]);
-    git(&root, ["config", "user.name", "Nit Test"]);
+    git(&root, ["config", "user.email", "gnit-test@example.com"]);
+    git(&root, ["config", "user.name", "Gnit Test"]);
     git(
         &root,
         ["remote", "add", "origin", root_remote.to_str().unwrap()],
@@ -2604,11 +2609,11 @@ fn workspace_with_remotes() -> RemoteFixture {
     git_init(&root.join("vendor/sdk"));
     git(
         &root.join("vendor/sdk"),
-        ["config", "user.email", "nit-test@example.com"],
+        ["config", "user.email", "gnit-test@example.com"],
     );
     git(
         &root.join("vendor/sdk"),
-        ["config", "user.name", "Nit Test"],
+        ["config", "user.name", "Gnit Test"],
     );
     git(
         &root.join("vendor/sdk"),
@@ -2619,8 +2624,8 @@ fn workspace_with_remotes() -> RemoteFixture {
     git(&root.join("vendor/sdk"), ["commit", "-m", "Initial sdk"]);
     git(&root.join("vendor/sdk"), ["push", "origin", "HEAD"]);
 
-    nit(&root, ["init"]);
-    nit(&root, ["adopt", "vendor/sdk", "--id", "sdk"]);
+    gnit(&root, ["init"]);
+    gnit(&root, ["adopt", "vendor/sdk", "--id", "sdk"]);
 
     RemoteFixture {
         _temp: temp,
@@ -2645,8 +2650,8 @@ fn workspace_with_three_member_remotes() -> ThreeMemberRemoteFixture {
     let root = temp.path().join("workspace");
     std::fs::create_dir(&root).unwrap();
     git_init(&root);
-    git(&root, ["config", "user.email", "nit-test@example.com"]);
-    git(&root, ["config", "user.name", "Nit Test"]);
+    git(&root, ["config", "user.email", "gnit-test@example.com"]);
+    git(&root, ["config", "user.name", "Gnit Test"]);
     git(
         &root,
         ["remote", "add", "origin", root_remote.to_str().unwrap()],
@@ -2660,10 +2665,10 @@ fn workspace_with_three_member_remotes() -> ThreeMemberRemoteFixture {
     create_member_repo(&root, "app", &app_remote, "app.txt", "app v1\n");
     create_member_repo(&root, "docs", &docs_remote, "docs.txt", "docs v1\n");
 
-    nit(&root, ["init"]);
-    nit(&root, ["adopt", "sdk", "--id", "sdk"]);
-    nit(&root, ["adopt", "app", "--id", "app"]);
-    nit(&root, ["adopt", "docs", "--id", "docs"]);
+    gnit(&root, ["init"]);
+    gnit(&root, ["adopt", "sdk", "--id", "sdk"]);
+    gnit(&root, ["adopt", "app", "--id", "app"]);
+    gnit(&root, ["adopt", "docs", "--id", "docs"]);
 
     ThreeMemberRemoteFixture {
         _temp: temp,
@@ -2679,8 +2684,8 @@ fn create_member_repo(root: &Path, path: &str, remote: &Path, file: &str, conten
     let member = root.join(path);
     std::fs::create_dir_all(&member).unwrap();
     git_init(&member);
-    git(&member, ["config", "user.email", "nit-test@example.com"]);
-    git(&member, ["config", "user.name", "Nit Test"]);
+    git(&member, ["config", "user.email", "gnit-test@example.com"]);
+    git(&member, ["config", "user.name", "Gnit Test"]);
     git(
         &member,
         ["remote", "add", "origin", remote.to_str().unwrap()],
@@ -2697,8 +2702,8 @@ fn advance_remote(base: &Path, remote: &Path, dirname: &str, file: &str, content
         base,
         &["clone", remote.to_str().unwrap(), clone.to_str().unwrap()],
     );
-    git(&clone, ["config", "user.email", "nit-test@example.com"]);
-    git(&clone, ["config", "user.name", "Nit Test"]);
+    git(&clone, ["config", "user.email", "gnit-test@example.com"]);
+    git(&clone, ["config", "user.name", "Gnit Test"]);
     std::fs::write(clone.join(file), content).unwrap();
     git(&clone, ["add", file]);
     git(&clone, ["commit", "-m", "Advance remote"]);
@@ -2706,7 +2711,7 @@ fn advance_remote(base: &Path, remote: &Path, dirname: &str, file: &str, content
 }
 
 fn remove_pins_with_label(root: &Path, label: &str) {
-    let pins_dir = root.join(".nit/pins");
+    let pins_dir = root.join(".gnit/pins");
     for entry in std::fs::read_dir(&pins_dir).unwrap() {
         let path = entry.unwrap().path();
         let text = std::fs::read_to_string(&path).unwrap();
@@ -2725,37 +2730,37 @@ struct SkillEnv {
 
 impl SkillEnv {
     fn command<const N: usize>(&self, args: [&str; N]) -> Command {
-        let mut command = Command::cargo_bin("nit").unwrap();
+        let mut command = Command::cargo_bin("gnit").unwrap();
         command
             .args(args)
             .current_dir(&self.home)
             .env("HOME", &self.home)
             .env("USERPROFILE", &self.home)
-            .env("NIT_DATA_DIR", &self.data)
+            .env("GNIT_DATA_DIR", &self.data)
             .env("XDG_DATA_HOME", self.home.join(".xdg-data"))
             .env("GROK_HOME", &self.grok_home)
-            .env("NIT_NO_UPKEEP", "true");
+            .env("GNIT_NO_UPKEEP", "true");
         command
     }
 
     fn managed_skill(&self) -> PathBuf {
-        self.data.join("skills/nit")
+        self.data.join("skills/gnit")
     }
 
     fn claude_skill(&self) -> PathBuf {
-        self.home.join(".claude/skills/nit")
+        self.home.join(".claude/skills/gnit")
     }
 
     fn codex_skill(&self) -> PathBuf {
-        self.home.join(".codex/skills/nit")
+        self.home.join(".codex/skills/gnit")
     }
 
     fn opencode_skill(&self) -> PathBuf {
-        self.home.join(".opencode/skills/nit")
+        self.home.join(".opencode/skills/gnit")
     }
 
     fn grok_skill(&self) -> PathBuf {
-        self.grok_home.join("skills/nit")
+        self.grok_home.join("skills/gnit")
     }
 }
 
@@ -2784,13 +2789,13 @@ struct FakeGh {
 #[cfg(unix)]
 impl FakeGh {
     fn command<const N: usize>(&self, dir: &Path, args: [&str; N]) -> Command {
-        let mut command = Command::cargo_bin("nit").unwrap();
+        let mut command = Command::cargo_bin("gnit").unwrap();
         command
             .args(args)
             .current_dir(dir)
-            .env("NIT_GH_BIN", &self.bin)
-            .env("NIT_FAKE_GH_STATE", &self.state)
-            .env("NIT_NO_UPKEEP", "true");
+            .env("GNIT_GH_BIN", &self.bin)
+            .env("GNIT_FAKE_GH_STATE", &self.state)
+            .env("GNIT_NO_UPKEEP", "true");
         hermetic_git_env(&mut command);
         command
     }
@@ -2834,7 +2839,7 @@ import json
 import os
 import sys
 
-state_path = os.environ.get("NIT_FAKE_GH_STATE")
+state_path = os.environ.get("GNIT_FAKE_GH_STATE")
 
 def normalize(data):
     data.setdefault("next", 1)
@@ -2880,7 +2885,7 @@ if args == ["--version"]:
     sys.exit(0)
 if args[:2] == ["auth", "status"]:
     record(args)
-    print("Logged in to github.com as nit-test")
+    print("Logged in to github.com as gnit-test")
     sys.exit(0)
 if args[:2] == ["repo", "view"]:
     record(args)
@@ -2916,7 +2921,7 @@ if args[:2] == ["pr", "list"]:
 if args[:2] == ["pr", "create"]:
     data = record(args)
     repo = arg_after(args, "-R")
-    if os.environ.get("NIT_FAKE_GH_FAIL_CREATE_REPO") == repo:
+    if os.environ.get("GNIT_FAKE_GH_FAIL_CREATE_REPO") == repo:
         print(f"forced create failure for {repo}", file=sys.stderr)
         sys.exit(1)
     number = int(data.get("next", 1))
@@ -2944,7 +2949,7 @@ if args[:2] == ["pr", "edit"]:
     number = int(args[2])
     repo = arg_after(args, "-R")
     body = arg_after(args, "--body")
-    if os.environ.get("NIT_FAKE_GH_FAIL_EDIT_REPO") == repo:
+    if os.environ.get("GNIT_FAKE_GH_FAIL_EDIT_REPO") == repo:
         print(f"forced edit failure for {repo}", file=sys.stderr)
         sys.exit(1)
     for pr in data["prs"]:
@@ -3010,31 +3015,31 @@ fn three_repo_pr_change() -> (ThreeMemberRemoteFixture, String) {
     fs::write(workspace.join("README.md"), "root pr flow\n").unwrap();
     fs::write(workspace.join("sdk/sdk.txt"), "sdk pr flow\n").unwrap();
     fs::write(workspace.join("app/app.txt"), "app pr flow\n").unwrap();
-    nit(
+    gnit(
         workspace,
         ["add", "README.md", "sdk/sdk.txt", "app/app.txt"],
     );
-    let land = nit(
+    let land = gnit(
         workspace,
         ["land", "review-pin", "-m", "Add linked PR flow"],
     );
     let change_id = parse_created_change(&land);
-    nit(workspace, ["push"]).success();
+    gnit(workspace, ["push"]).success();
 
     (fixture, change_id)
 }
 
-fn nit<const N: usize>(dir: &Path, args: [&str; N]) -> assert_cmd::assert::Assert {
-    nit_command(dir, args).assert()
+fn gnit<const N: usize>(dir: &Path, args: [&str; N]) -> assert_cmd::assert::Assert {
+    gnit_command(dir, args).assert()
 }
 
-/// Build a `nit` invocation whose child Git processes are hermetic: the
+/// Build a `gnit` invocation whose child Git processes are hermetic: the
 /// developer's global/system Git config (gpgsign, hooksPath, autocrlf, ...) is
-/// neutralized and a deterministic identity is supplied, so Nit's own internal
+/// neutralized and a deterministic identity is supplied, so Gnit's own internal
 /// commits behave identically on every machine. Mirrors `git_base_command` for
 /// the fixtures' direct Git calls.
-fn nit_command<const N: usize>(dir: &Path, args: [&str; N]) -> Command {
-    let mut command = Command::cargo_bin("nit").unwrap();
+fn gnit_command<const N: usize>(dir: &Path, args: [&str; N]) -> Command {
+    let mut command = Command::cargo_bin("gnit").unwrap();
     command.args(args).current_dir(dir);
     hermetic_git_env(&mut command);
     command
@@ -3044,10 +3049,10 @@ fn hermetic_git_env(command: &mut Command) {
     command
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_SYSTEM", "/dev/null")
-        .env("GIT_AUTHOR_NAME", "Nit Test")
-        .env("GIT_AUTHOR_EMAIL", "nit-test@example.com")
-        .env("GIT_COMMITTER_NAME", "Nit Test")
-        .env("GIT_COMMITTER_EMAIL", "nit-test@example.com");
+        .env("GIT_AUTHOR_NAME", "Gnit Test")
+        .env("GIT_AUTHOR_EMAIL", "gnit-test@example.com")
+        .env("GIT_COMMITTER_NAME", "Gnit Test")
+        .env("GIT_COMMITTER_EMAIL", "gnit-test@example.com");
 }
 
 fn parse_created_change(assert: &assert_cmd::assert::Assert) -> String {
@@ -3065,14 +3070,14 @@ fn call_is(call: &[String], first: &str, second: &str) -> bool {
     call.first().is_some_and(|arg| arg == first) && call.get(1).is_some_and(|arg| arg == second)
 }
 
-fn assert_nit_guidance(text: &str) {
-    assert!(text.contains("<!-- nit:workspace:start -->"), "{text}");
-    assert!(text.contains("Nit workspace"), "{text}");
-    assert!(text.contains("nit --help"), "{text}");
-    assert!(text.contains("<!-- nit:workspace:end -->"), "{text}");
-    assert_eq!(nit_guidance_count(text), 1, "{text}");
+fn assert_gnit_guidance(text: &str) {
+    assert!(text.contains("<!-- gnit:workspace:start -->"), "{text}");
+    assert!(text.contains("Gnit workspace"), "{text}");
+    assert!(text.contains("gnit --help"), "{text}");
+    assert!(text.contains("<!-- gnit:workspace:end -->"), "{text}");
+    assert_eq!(gnit_guidance_count(text), 1, "{text}");
 }
 
-fn nit_guidance_count(text: &str) -> usize {
-    text.matches("<!-- nit:workspace:start -->").count()
+fn gnit_guidance_count(text: &str) -> usize {
+    text.matches("<!-- gnit:workspace:start -->").count()
 }

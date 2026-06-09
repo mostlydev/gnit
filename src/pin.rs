@@ -18,8 +18,8 @@ pub fn create_with_changes(
     no_commit: bool,
 ) -> Result<()> {
     let cwd = env::current_dir()?;
-    let root = workspace::find_nit_workspace(&cwd)
-        .context("not in a Nit workspace; run `nit init` first")?;
+    let root = workspace::find_gnit_workspace(&cwd)
+        .context("not in a Gnit workspace; run `gnit init` first")?;
     let roster = Roster::read(&root)?;
 
     if roster.members.is_empty() {
@@ -60,7 +60,7 @@ pub fn create_with_changes(
 
     let path = pin.write(&root)?;
     if !no_commit {
-        workspace::commit_metadata(&root, &format!("Create Nit pin {}", pin.id))?;
+        workspace::commit_metadata(&root, &format!("Create Gnit pin {}", pin.id))?;
     }
 
     println!("created Pin {}", pin.id);

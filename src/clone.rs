@@ -37,7 +37,7 @@ pub fn clone_workspace(url: String, path: Option<PathBuf>, pin: Option<String>) 
         hydrate_members(&root, &roster)?;
     }
     workspace::repair_required_excludes(&root, &roster)?;
-    println!("cloned Nit workspace {}", root.display());
+    println!("cloned Gnit workspace {}", root.display());
     Ok(())
 }
 

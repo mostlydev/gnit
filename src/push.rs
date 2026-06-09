@@ -10,8 +10,8 @@ use crate::workspace;
 
 pub fn push(resume: bool) -> Result<()> {
     let cwd = env::current_dir()?;
-    let root = workspace::find_nit_workspace(&cwd)
-        .context("not in a Nit workspace; run `nit init` first")?;
+    let root = workspace::find_gnit_workspace(&cwd)
+        .context("not in a Gnit workspace; run `gnit init` first")?;
     let roster = Roster::read(&root)?;
 
     if resume {
@@ -79,7 +79,7 @@ pub fn push(resume: bool) -> Result<()> {
         println!("push complete");
         Ok(())
     } else {
-        bail!("push incomplete; resolve failures and run `nit push --resume`")
+        bail!("push incomplete; resolve failures and run `gnit push --resume`")
     }
 }
 
@@ -334,7 +334,7 @@ fn find_unreachable_pin_member(root: &Path, roster: &Roster) -> Result<Option<St
                 PinCommitReachability::Unknown(reason) => {
                     let label = pin.label.as_deref().unwrap_or(&pin.id);
                     return Ok(Some(format!(
-                        "pin {label} references member {} commit {} but Nit could not verify it: {reason}",
+                        "pin {label} references member {} commit {} but Gnit could not verify it: {reason}",
                         member.id,
                         short_commit(&member.commit)
                     )));

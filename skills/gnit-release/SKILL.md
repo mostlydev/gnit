@@ -1,25 +1,25 @@
 ---
-name: nit-release
+name: gnit-release
 description: >
-  Cuts a Nit release: runs pre-release checks (fmt, clippy, tests, clean tree,
+  Cuts a Gnit release: runs pre-release checks (fmt, clippy, tests, clean tree,
   auth, fetched tags), proposes the next semver from the commits since the last
   tag, sweeps docs (README, site guide, the bundled CLI skill) for release-tied
   updates, bumps the version in Cargo.toml and Cargo.lock, commits and pushes the
   bump to master, then tags vX.Y.Z and pushes the tag so the tag-driven release
   workflow builds the binaries and publishes the GitHub release. Use this skill
   whenever the user says "release", "cut a release", "new version", "bump the
-  version", "ship vX.Y.Z", or anything about shipping a new version of nit.
+  version", "ship vX.Y.Z", or anything about shipping a new version of gnit.
 ---
 
-# Nit release
+# Gnit release
 
-This skill cuts a release of the `nit` CLI. The pipeline is **tag-driven**:
+This skill cuts a release of the `gnit` CLI. The pipeline is **tag-driven**:
 pushing a `v*` tag triggers `.github/workflows/release.yml`, which builds the
 binaries for every target and publishes the GitHub release. Two other workflows
 react to the same push to `master`: `ci.yml` (fmt + clippy + tests on Ubuntu and
 macOS) and `deploy-site.yml` (redeploys the VitePress site).
 
-Nit is a single Rust binary with no submodules, no Docker images, and no runtime
+Gnit is a single Rust binary with no submodules, no Docker images, and no runtime
 infra pins — so a release is just: get `master` green and version-bumped, push
 it, then push the tag. The release workflow does the building and publishing.
 
@@ -95,15 +95,15 @@ commit doc changes as their own focused commit(s) ahead of the version bump.
   cd site && npm run build   # vitepress build; output is the gitignored dist/
   ```
 
-### Bundled CLI skill — `skills/nit/SKILL.md`
+### Bundled CLI skill — `skills/gnit/SKILL.md`
 
-This is the **shipped** agent skill: it is embedded into the `nit` binary via
-`include_str!("../skills/nit/SKILL.md")` in `src/skills.rs` and is what
-`nit skills install` puts into agent harnesses. Any user-visible CLI change must
+This is the **shipped** agent skill: it is embedded into the `gnit` binary via
+`include_str!("../skills/gnit/SKILL.md")` in `src/skills.rs` and is what
+`gnit skills install` puts into agent harnesses. Any user-visible CLI change must
 be reflected here, or every agent using the installed skill gives stale guidance.
 
-(This `nit-release` skill is **not** shipped — `nit skills install` is hardcoded
-to `skills/nit/` only, so the maintainer skills under `skills/` never reach end
+(This `gnit-release` skill is **not** shipped — `gnit skills install` is hardcoded
+to `skills/gnit/` only, so the maintainer skills under `skills/` never reach end
 users.)
 
 ### Decisions and examples
@@ -121,17 +121,17 @@ grep -rn "0\.[0-9][0-9]*\.[0-9]" README.md site/ skills/ --include='*.md'
 
 ## Step 4: Bump the version
 
-Edit the version in both files — in `Cargo.lock`, change only the `name = "nit"`
+Edit the version in both files — in `Cargo.lock`, change only the `name = "gnit"`
 package's `version`:
 
 - `Cargo.toml` → `version = "X.Y.Z"` under `[package]`.
-- `Cargo.lock` → the `version` line directly under `name = "nit"`.
+- `Cargo.lock` → the `version` line directly under `name = "gnit"`.
 
 Verify the bump is internally consistent and reported correctly:
 
 ```bash
 cargo build --locked            # fails if Cargo.lock drifted from Cargo.toml
-./target/debug/nit --version    # should print: nit X.Y.Z
+./target/debug/gnit --version    # should print: gnit X.Y.Z
 ```
 
 ## Step 5: Commit and push master first
@@ -162,7 +162,7 @@ git push origin master
 
 ## Step 6: Tag and push the release
 
-Nit tags are **lightweight** and sit on the bump commit (match `v0.8.0`,
+Gnit tags are **lightweight** and sit on the bump commit (match `v0.8.0`,
 `v0.8.1`):
 
 ```bash
@@ -172,7 +172,7 @@ git push origin vX.Y.Z
 
 Pushing the tag triggers `release.yml`. The build job compiles three targets —
 `linux-x86_64`, `darwin-x86_64`, `darwin-aarch64` — packages each as
-`nit-X.Y.Z-<os>-<arch>.tar.gz`, and the release job creates the GitHub release
+`gnit-X.Y.Z-<os>-<arch>.tar.gz`, and the release job creates the GitHub release
 with those tarballs plus `checksums.txt`. GitHub marks the newest release Latest
 automatically.
 
@@ -192,8 +192,8 @@ gh release list --limit 3   # vX.Y.Z should be Latest
 ```
 
 Expect: not draft, not prerelease, marked Latest, and four assets —
-`checksums.txt`, `nit-X.Y.Z-darwin-aarch64.tar.gz`,
-`nit-X.Y.Z-darwin-x86_64.tar.gz`, `nit-X.Y.Z-linux-x86_64.tar.gz`.
+`checksums.txt`, `gnit-X.Y.Z-darwin-aarch64.tar.gz`,
+`gnit-X.Y.Z-darwin-x86_64.tar.gz`, `gnit-X.Y.Z-linux-x86_64.tar.gz`.
 
 Also confirm CI went green on both the master push and the tag, and watch the
 `Deploy Site` run to success if the release touched `site/`:
@@ -205,12 +205,12 @@ gh run watch <deploy-site-run-id> --exit-status
 
 Report the result to the user with links:
 
-- Release: `https://github.com/mostlydev/nit/releases/tag/vX.Y.Z`
-- Site: `https://mostlydev.github.io/nit/`
+- Release: `https://github.com/mostlydev/gnit/releases/tag/vX.Y.Z`
+- Site: `https://mostlydev.github.io/gnit/`
 
 ### Optional: enrich the release notes
 
-The workflow publishes bare notes (`Nit vX.Y.Z`). For a notable release, replace
+The workflow publishes bare notes (`Gnit vX.Y.Z`). For a notable release, replace
 them with synthesized highlights grouped by theme — not a raw commit list:
 
 ```bash
@@ -234,7 +234,7 @@ EOF
 - **Local clippy passes, CI clippy fails** — CI uses current stable with
   `-D warnings`. `rustup update stable && cargo clippy --all-targets -- -D warnings`
   before tagging.
-- **`cargo build --locked` fails after the bump** — the `Cargo.lock` nit entry
+- **`cargo build --locked` fails after the bump** — the `Cargo.lock` gnit entry
   was not bumped; update it to match `Cargo.toml`.
 - **Push rejected (remote ahead)** — `git pull --rebase origin master`, then
   re-push master before tagging.

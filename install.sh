@@ -1,9 +1,9 @@
 #!/bin/sh
-# Nit installer - curl -sSL https://raw.githubusercontent.com/mostlydev/nit/master/install.sh | sh
+# Gnit installer - curl -sSL https://raw.githubusercontent.com/mostlydev/gnit/master/install.sh | sh
 set -eu
 
-REPO="mostlydev/nit"
-INSTALL_DIR="${NIT_INSTALL_DIR:-$HOME/.local/bin}"
+REPO="mostlydev/gnit"
+INSTALL_DIR="${GNIT_INSTALL_DIR:-$HOME/.local/bin}"
 
 info() { printf '  %s\n' "$@"; }
 err()  { printf 'Error: %s\n' "$@" >&2; exit 1; }
@@ -39,7 +39,7 @@ if [ -z "$TAG" ]; then
 fi
 
 VERSION="${TAG#v}"
-TARBALL="nit-${VERSION}-${OS}-${ARCH}.tar.gz"
+TARBALL="gnit-${VERSION}-${OS}-${ARCH}.tar.gz"
 BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
 
 TMPDIR="$(mktemp -d)"
@@ -71,10 +71,10 @@ fi
 
 mkdir -p "$INSTALL_DIR"
 tar -xzf "${TMPDIR}/${TARBALL}" -C "$TMPDIR"
-mv "${TMPDIR}/nit" "${INSTALL_DIR}/nit"
-chmod +x "${INSTALL_DIR}/nit"
+mv "${TMPDIR}/gnit" "${INSTALL_DIR}/gnit"
+chmod +x "${INSTALL_DIR}/gnit"
 
-info "Installed nit to ${INSTALL_DIR}/nit"
+info "Installed gnit to ${INSTALL_DIR}/gnit"
 
 case ":$PATH:" in
   *":${INSTALL_DIR}:"*) ;;
@@ -87,4 +87,4 @@ case ":$PATH:" in
 esac
 
 echo ""
-info "Run 'nit doctor' to verify your installation."
+info "Run 'gnit doctor' to verify your installation."

@@ -9,28 +9,28 @@ use anyhow::{bail, Context, Result};
 use crate::git;
 use crate::metadata::{Roster, RosterMember, ROSTER_PATH};
 
-const AGENT_GUIDANCE_START: &str = "<!-- nit:workspace:start -->";
-const AGENT_GUIDANCE_BLOCK: &str = r#"<!-- nit:workspace:start -->
-> **Nit workspace** — this repository is one of several Git repos coordinated by Nit.
-> For changes that span more than one repo, drive them with the `nit` CLI and the Nit
-> skill (run `nit --help`) instead of hand-managing submodules or raw `git` across repos.
-<!-- nit:workspace:end -->
+const AGENT_GUIDANCE_START: &str = "<!-- gnit:workspace:start -->";
+const AGENT_GUIDANCE_BLOCK: &str = r#"<!-- gnit:workspace:start -->
+> **Gnit workspace** — this repository is one of several Git repos coordinated by Gnit.
+> For changes that span more than one repo, drive them with the `gnit` CLI and the Gnit
+> skill (run `gnit --help`) instead of hand-managing submodules or raw `git` across repos.
+<!-- gnit:workspace:end -->
 "#;
 
 pub fn init(control: bool, local: bool, remote: Option<String>) -> Result<()> {
     let cwd = env::current_dir()?;
-    let nit_dir = cwd.join(".nit");
+    let gnit_dir = cwd.join(".gnit");
     let roster = cwd.join(ROSTER_PATH);
 
     if roster.exists() {
-        bail!("Nit workspace already exists at {}", cwd.display());
+        bail!("Gnit workspace already exists at {}", cwd.display());
     }
 
     if control && !git::is_git_repo(&cwd) {
         git::output_in(&cwd, ["init"]).context("initialize control git repo")?;
     }
 
-    fs::create_dir_all(&nit_dir).context("create .nit")?;
+    fs::create_dir_all(&gnit_dir).context("create .gnit")?;
     let mode = if local {
         "local"
     } else if control {
@@ -42,10 +42,10 @@ pub fn init(control: bool, local: bool, remote: Option<String>) -> Result<()> {
     let agent_guidance = ensure_agent_guidance(&cwd)?;
 
     if !local {
-        commit_metadata_with_paths(&cwd, "Initialize Nit workspace", &agent_guidance).ok();
+        commit_metadata_with_paths(&cwd, "Initialize Gnit workspace", &agent_guidance).ok();
     }
 
-    println!("initialized Nit workspace");
+    println!("initialized Gnit workspace");
     println!("  root: {}", cwd.display());
     println!("  roster: {}", roster.display());
     Ok(())
@@ -57,7 +57,8 @@ pub fn adopt(paths: Vec<PathBuf>, id: Option<String>, no_commit: bool) -> Result
     }
 
     let cwd = env::current_dir()?;
-    let root = find_nit_workspace(&cwd).context("not in a Nit workspace; run `nit init` first")?;
+    let root =
+        find_gnit_workspace(&cwd).context("not in a Gnit workspace; run `gnit init` first")?;
     let mut roster = Roster::read(&root)?;
     let mut adopted = Vec::new();
 
@@ -102,7 +103,7 @@ pub fn adopt(paths: Vec<PathBuf>, id: Option<String>, no_commit: bool) -> Result
     repair_required_excludes(&root, &roster)?;
 
     if !no_commit {
-        commit_metadata(&root, "Update Nit roster").ok();
+        commit_metadata(&root, "Update Gnit roster").ok();
     }
 
     let ids = adopted
@@ -115,7 +116,7 @@ pub fn adopt(paths: Vec<PathBuf>, id: Option<String>, no_commit: bool) -> Result
 }
 
 pub fn doctor() -> Result<()> {
-    println!("Nit doctor");
+    println!("Gnit doctor");
     println!("  version: {}", env!("CARGO_PKG_VERSION"));
     println!("  commit: {}", build_commit());
 
@@ -125,7 +126,7 @@ pub fn doctor() -> Result<()> {
     }
     report_gh_health();
 
-    match find_nit_workspace(env::current_dir()?.as_path()) {
+    match find_gnit_workspace(env::current_dir()?.as_path()) {
         Some(root) => {
             println!("  workspace: {}", root.display());
             let roster = Roster::read(&root)?;
@@ -150,7 +151,7 @@ pub fn doctor() -> Result<()> {
 }
 
 fn report_gh_health() {
-    let gh = env::var("NIT_GH_BIN").unwrap_or_else(|_| "gh".to_string());
+    let gh = env::var("GNIT_GH_BIN").unwrap_or_else(|_| "gh".to_string());
     match Command::new(&gh).arg("--version").output() {
         Ok(output) if output.status.success() => {
             let version = String::from_utf8_lossy(&output.stdout)
@@ -178,10 +179,11 @@ fn report_gh_health() {
 
 pub fn ignore(paths: Vec<PathBuf>) -> Result<()> {
     if paths.is_empty() {
-        bail!("nothing specified; use `nit ignore <path>...`");
+        bail!("nothing specified; use `gnit ignore <path>...`");
     }
     let cwd = env::current_dir()?;
-    let root = find_nit_workspace(&cwd).context("not in a Nit workspace; run `nit init` first")?;
+    let root =
+        find_gnit_workspace(&cwd).context("not in a Gnit workspace; run `gnit init` first")?;
     let mut roster = Roster::read(&root)?;
     for path in paths {
         let rel = relative_to(&root, &absolutize(&cwd, &path))?;
@@ -192,14 +194,15 @@ pub fn ignore(paths: Vec<PathBuf>) -> Result<()> {
     }
     roster.write(&root)?;
     repair_required_excludes(&root, &roster)?;
-    commit_metadata(&root, "Update Nit ignored paths").ok();
+    commit_metadata(&root, "Update Gnit ignored paths").ok();
     println!("updated ignored paths");
     Ok(())
 }
 
 pub fn import_submodule(path: PathBuf, id: Option<String>) -> Result<()> {
     let cwd = env::current_dir()?;
-    let root = find_nit_workspace(&cwd).context("not in a Nit workspace; run `nit init` first")?;
+    let root =
+        find_gnit_workspace(&cwd).context("not in a Gnit workspace; run `gnit init` first")?;
     let abs = absolutize(&cwd, &path);
     let rel = relative_to(&root, &abs)?;
     let rel_text = rel.to_string_lossy().to_string();
@@ -221,19 +224,19 @@ pub fn import_submodule(path: PathBuf, id: Option<String>) -> Result<()> {
     .ok();
 
     adopt(vec![path], id, true)?;
-    git::output_in(&root, ["add", ".nit"])?;
+    git::output_in(&root, ["add", ".gnit"])?;
     if root.join(".gitmodules").exists() {
         git::output_in(&root, ["add", ".gitmodules"])?;
     }
     git::output_in(
         &root,
-        ["commit", "-m", &format!("Import Nit member {rel_text}")],
+        ["commit", "-m", &format!("Import Gnit member {rel_text}")],
     )?;
     println!("imported submodule {rel_text}");
     Ok(())
 }
 
-pub fn find_nit_workspace(start: &Path) -> Option<PathBuf> {
+pub fn find_gnit_workspace(start: &Path) -> Option<PathBuf> {
     for dir in start.ancestors() {
         if dir.join(ROSTER_PATH).exists() {
             return Some(dir.to_path_buf());
@@ -413,7 +416,7 @@ fn commit_metadata_with_paths(root: &Path, message: &str, extra_paths: &[PathBuf
     }
 
     // Local excludes (.git/info/exclude) are intentionally local; never committed.
-    let mut paths = vec![PathBuf::from(".nit")];
+    let mut paths = vec![PathBuf::from(".gnit")];
     paths.extend(extra_paths.iter().cloned());
 
     let mut add_args = vec![OsString::from("add")];
@@ -429,7 +432,7 @@ fn commit_metadata_with_paths(root: &Path, message: &str, extra_paths: &[PathBuf
     let status = git::output_in_args(root, status_args)?;
     if !status.trim().is_empty() {
         // Pathspec-scope the commit so an unrelated staged change in the root
-        // repo is never swept into the Nit metadata commit.
+        // repo is never swept into the Gnit metadata commit.
         let mut commit_args = vec![
             OsString::from("commit"),
             OsString::from("-m"),
@@ -443,7 +446,7 @@ fn commit_metadata_with_paths(root: &Path, message: &str, extra_paths: &[PathBuf
 }
 
 fn build_commit() -> &'static str {
-    match option_env!("NIT_COMMIT") {
+    match option_env!("GNIT_COMMIT") {
         Some(commit) => commit,
         None => "dev",
     }

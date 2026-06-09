@@ -5,7 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 static NEXT_ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 pub fn change_id() -> String {
-    format!("NCH-{}-{}", current_millis(), disambiguator())
+    format!("GCH-{}-{}", current_millis(), disambiguator())
 }
 
 pub fn pin_id(label: Option<&str>) -> String {
@@ -24,11 +24,11 @@ fn current_millis() -> u128 {
 }
 
 /// A compact tiebreaker for ids minted within the same millisecond. The process
-/// id separates concurrent `nit` invocations; the per-process counter separates
+/// id separates concurrent `gnit` invocations; the per-process counter separates
 /// ids minted back-to-back inside one invocation. Both are rendered in
 /// minimal-width hex (no zero padding), and the counter — almost always 0 for a
 /// single-id invocation — is omitted entirely when it is 0. A typical id is
-/// therefore just `NCH-<millis>-<pid hex>` (e.g. `NCH-1781013904682-72e5`); only
+/// therefore just `GCH-<millis>-<pid hex>` (e.g. `GCH-1781013904682-72e5`); only
 /// a burst that mints several ids in one process grows a `-<counter hex>` suffix.
 /// The `-` before the counter keeps the (pid, counter) encoding unambiguous.
 fn disambiguator() -> String {
@@ -65,7 +65,7 @@ mod tests {
     #[test]
     fn change_ids_include_disambiguator_after_millis() {
         let id = change_id();
-        let rest = id.strip_prefix("NCH-").expect("change id starts with NCH-");
+        let rest = id.strip_prefix("GCH-").expect("change id starts with GCH-");
         let (millis, disambiguator) = rest
             .split_once('-')
             .expect("change id has millis and disambiguator segments");

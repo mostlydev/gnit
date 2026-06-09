@@ -12,9 +12,9 @@ pub fn run_transparent_upkeep(verbose: bool) {
     let Ok(cwd) = env::current_dir() else {
         return;
     };
-    let Some(root) = workspace::find_nit_workspace(&cwd) else {
+    let Some(root) = workspace::find_gnit_workspace(&cwd) else {
         if verbose {
-            eprintln!("nit upkeep: not in a workspace");
+            eprintln!("gnit upkeep: not in a workspace");
         }
         return;
     };
@@ -25,16 +25,16 @@ pub fn run_transparent_upkeep(verbose: bool) {
     match workspace::repair_required_excludes(&root, &roster) {
         Ok(0) => {
             if verbose {
-                eprintln!("nit upkeep: no pending local maintenance");
+                eprintln!("gnit upkeep: no pending local maintenance");
             }
         }
         Ok(n) => {
             let noun = if n == 1 { "entry" } else { "entries" };
-            eprintln!("nit upkeep: restored {n} local exclude {noun}");
+            eprintln!("gnit upkeep: restored {n} local exclude {noun}");
         }
         Err(error) => {
             if verbose {
-                eprintln!("nit upkeep: skipped exclude repair: {error}");
+                eprintln!("gnit upkeep: skipped exclude repair: {error}");
             }
         }
     }

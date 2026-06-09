@@ -3,11 +3,11 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand};
 
 #[derive(Debug, Parser)]
-#[command(name = "nit")]
+#[command(name = "gnit")]
 #[command(version, about = "Git-native multi-repo workspaces", long_about = None)]
 pub struct Cli {
     /// Skip automatic non-destructive upkeep for this invocation.
-    #[arg(long, global = true, env = "NIT_NO_UPKEEP", hide = true)]
+    #[arg(long, global = true, env = "GNIT_NO_UPKEEP", hide = true)]
     pub no_upkeep: bool,
 
     /// Show upkeep actions that would normally be quiet.
@@ -20,7 +20,7 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
-    /// Clone a Nit workspace and hydrate its member repos.
+    /// Clone a Gnit workspace and hydrate its member repos.
     Clone {
         /// Workspace/root repository URL.
         url: String,
@@ -41,7 +41,7 @@ pub enum Commands {
         /// Paths to stage.
         paths: Vec<PathBuf>,
     },
-    /// Commit staged workspace changes with a shared Nit-Change-Id.
+    /// Commit staged workspace changes with a shared Gnit-Change-Id.
     Commit {
         /// Commit message.
         #[arg(short, long)]
@@ -63,7 +63,7 @@ pub enum Commands {
         #[arg(long)]
         exact: bool,
     },
-    /// Create Nit metadata in this workspace.
+    /// Create Gnit metadata in this workspace.
     Init {
         /// Create a tiny workspace-control repo when no natural root exists.
         #[arg(long)]
@@ -83,7 +83,7 @@ pub enum Commands {
         /// Member id. Only valid when adopting one path.
         #[arg(long)]
         id: Option<String>,
-        /// Do not auto-commit Nit metadata changes.
+        /// Do not auto-commit Gnit metadata changes.
         #[arg(long)]
         no_commit: bool,
     },
@@ -93,7 +93,7 @@ pub enum Commands {
         #[arg(required = true)]
         paths: Vec<PathBuf>,
     },
-    /// Convert a tracked Git submodule into a Nit member.
+    /// Convert a tracked Git submodule into a Gnit member.
     ImportSubmodule {
         /// Submodule path.
         path: PathBuf,
@@ -101,9 +101,9 @@ pub enum Commands {
         #[arg(long)]
         id: Option<String>,
     },
-    /// Diagnose the Nit installation and current workspace.
+    /// Diagnose the Gnit installation and current workspace.
     Doctor,
-    /// Show the current Nit workspace state.
+    /// Show the current Gnit workspace state.
     Status,
     /// Show the unified workspace timeline of Changes and Pins.
     Log,
@@ -114,11 +114,11 @@ pub enum Commands {
         /// Record provenance from a Change.
         #[arg(long)]
         change: Option<String>,
-        /// Do not auto-commit Nit metadata changes.
+        /// Do not auto-commit Gnit metadata changes.
         #[arg(long)]
         no_commit: bool,
     },
-    /// Inspect changes reconstructed from Nit-Change-Id trailers.
+    /// Inspect changes reconstructed from Gnit-Change-Id trailers.
     Change {
         #[command(subcommand)]
         command: ChangeCommands,
@@ -141,7 +141,7 @@ pub enum Commands {
         /// Change id or Pin id/label.
         target: String,
     },
-    /// Update the nit binary from the latest GitHub release.
+    /// Update the gnit binary from the latest GitHub release.
     Update {
         /// Check the latest release and refresh cached release metadata.
         #[arg(long, conflicts_with_all = ["dry_run", "force"])]
@@ -153,7 +153,7 @@ pub enum Commands {
         #[arg(long)]
         force: bool,
     },
-    /// Install the bundled Nit skill into agent harnesses.
+    /// Install the bundled Gnit skill into agent harnesses.
     Skills {
         #[command(subcommand)]
         command: SkillsCommands,
@@ -215,11 +215,11 @@ pub struct PrOpenArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum SkillsCommands {
-    /// Install the bundled Nit skill.
+    /// Install the bundled Gnit skill.
     Install(SkillsInstallArgs),
-    /// Remove the bundled Nit skill from harness skill directories.
+    /// Remove the bundled Gnit skill from harness skill directories.
     Uninstall(SkillsUninstallArgs),
-    /// Show installed Nit skill state.
+    /// Show installed Gnit skill state.
     List,
 }
 
@@ -233,13 +233,13 @@ pub struct SkillsInstallArgs {
     /// Copy the skill instead of linking it.
     #[arg(long, conflicts_with = "link")]
     pub copy: bool,
-    /// Link the skill to Nit's managed source. This is the default.
+    /// Link the skill to Gnit's managed source. This is the default.
     #[arg(long)]
     pub link: bool,
     /// Print planned actions without changing files.
     #[arg(long)]
     pub print: bool,
-    /// Replace an existing non-Nit-owned skill target.
+    /// Replace an existing non-Gnit-owned skill target.
     #[arg(long)]
     pub force: bool,
 }

@@ -6,13 +6,13 @@ Accepted.
 
 ## Decision
 
-Nit does not install Git hooks by default.
+Gnit does not install Git hooks by default.
 
-Raw Git usage is allowed. Nit reconstructs workspace state from Git history,
-Change trailers, the roster, and Pin artifacts. `nit status`, `nit checkout`,
-`nit doctor`, and `nit push` surface and repair drift.
+Raw Git usage is allowed. Gnit reconstructs workspace state from Git history,
+Change trailers, the roster, and Pin artifacts. `gnit status`, `gnit checkout`,
+`gnit doctor`, and `gnit push` surface and repair drift.
 
-`nit hooks install` is an opt-in convenience. `nit hooks install --strict` is an
+`gnit hooks install` is an opt-in convenience. `gnit hooks install --strict` is an
 opt-in mode for managed agent environments. CI or server-side checks are the
 authoritative enforcement boundary.
 

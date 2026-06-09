@@ -7,18 +7,18 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 
-const REPO: &str = "mostlydev/nit";
-const INSTALLER_URL: &str = "https://raw.githubusercontent.com/mostlydev/nit/master/install.sh";
-const UPDATE_CHECK_URL: &str = "https://api.github.com/repos/mostlydev/nit/releases/latest";
+const REPO: &str = "mostlydev/gnit";
+const INSTALLER_URL: &str = "https://raw.githubusercontent.com/mostlydev/gnit/master/install.sh";
+const UPDATE_CHECK_URL: &str = "https://api.github.com/repos/mostlydev/gnit/releases/latest";
 const CHECK_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 const NOTICE_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
-const BUILD_COMMIT: &str = match option_env!("NIT_COMMIT") {
+const BUILD_COMMIT: &str = match option_env!("GNIT_COMMIT") {
     Some(commit) => commit,
     None => "dev",
 };
 
 pub fn run(dry_run: bool, force: bool) -> Result<()> {
-    println!("Nit updates install from GitHub Releases for {REPO}.");
+    println!("Gnit updates install from GitHub Releases for {REPO}.");
     println!("Installer: {INSTALLER_URL}");
     println!("Current build commit: {BUILD_COMMIT}");
 
@@ -29,7 +29,7 @@ pub fn run(dry_run: bool, force: bool) -> Result<()> {
 
     if BUILD_COMMIT == "dev" && !force {
         bail!(
-            "refusing to replace a dev build; rerun with `nit update --force` to use the release installer"
+            "refusing to replace a dev build; rerun with `gnit update --force` to use the release installer"
         );
     }
 
@@ -73,8 +73,8 @@ pub fn maybe_print_update_notice(verbose: bool) {
             official_build: BUILD_COMMIT != "dev",
             stdout_tty: std::io::stdout().is_terminal(),
             ci: env_flag("CI"),
-            upkeep_disabled: env_flag("NIT_NO_UPKEEP"),
-            notice_disabled: env_flag("NIT_NO_UPDATE_NOTICE"),
+            upkeep_disabled: env_flag("GNIT_NO_UPKEEP"),
+            notice_disabled: env_flag("GNIT_NO_UPDATE_NOTICE"),
         },
     );
 
@@ -82,7 +82,7 @@ pub fn maybe_print_update_notice(verbose: bool) {
         if let Some(cache) = cache.as_ref() {
             if let Some(latest) = cache.latest_version.as_deref() {
                 eprintln!(
-                    "nit {latest} is available (current {}); run `nit update`.",
+                    "gnit {latest} is available (current {}); run `gnit update`.",
                     env!("CARGO_PKG_VERSION")
                 );
                 let mut updated = cache.clone();
@@ -95,10 +95,10 @@ pub fn maybe_print_update_notice(verbose: bool) {
     if plan.refresh {
         if let Err(err) = spawn_background_check() {
             if verbose {
-                eprintln!("nit update notice: {err}");
+                eprintln!("gnit update notice: {err}");
             }
         } else if verbose {
-            eprintln!("nit update notice: scheduled background refresh");
+            eprintln!("gnit update notice: scheduled background refresh");
         }
     }
 }
@@ -110,15 +110,15 @@ pub fn check() -> Result<()> {
             Ok(())
         }
         Err(err) => {
-            eprintln!("nit update check unavailable: {err}");
+            eprintln!("gnit update check unavailable: {err}");
             Ok(())
         }
     }
 }
 
 fn refresh_notice_cache() -> Result<UpdateCache> {
-    let url = env::var("NIT_UPDATE_CHECK_URL").unwrap_or_else(|_| UPDATE_CHECK_URL.to_string());
-    let timeout = env::var("NIT_UPDATE_CHECK_TIMEOUT_SECS").unwrap_or_else(|_| "2".to_string());
+    let url = env::var("GNIT_UPDATE_CHECK_URL").unwrap_or_else(|_| UPDATE_CHECK_URL.to_string());
+    let timeout = env::var("GNIT_UPDATE_CHECK_TIMEOUT_SECS").unwrap_or_else(|_| "2".to_string());
     let curl = find_command("curl").context("find curl")?;
     let output = Command::new(curl)
         .args(["-fsSL", "--max-time", timeout.as_str(), url.as_str()])
@@ -151,9 +151,9 @@ fn print_check_result(cache: &UpdateCache) {
     let current = env!("CARGO_PKG_VERSION");
     let latest = cache.latest_version.as_deref().unwrap_or(current);
     if is_newer_version(latest, current) {
-        println!("nit {latest} is available (current {current}); run `nit update`.");
+        println!("gnit {latest} is available (current {current}); run `gnit update`.");
     } else {
-        println!("nit is up to date (current {current}; latest {latest}).");
+        println!("gnit is up to date (current {current}; latest {latest}).");
     }
 }
 
@@ -231,13 +231,13 @@ fn notice_plan(
 }
 
 fn cache_path() -> Option<PathBuf> {
-    if let Some(path) = env::var_os("NIT_UPDATE_CACHE_PATH") {
+    if let Some(path) = env::var_os("GNIT_UPDATE_CACHE_PATH") {
         return Some(PathBuf::from(path));
     }
     if let Some(base) = env::var_os("XDG_CACHE_HOME").filter(|value| !value.is_empty()) {
-        return Some(PathBuf::from(base).join("nit/update-check"));
+        return Some(PathBuf::from(base).join("gnit/update-check"));
     }
-    env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache/nit/update-check"))
+    env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache/gnit/update-check"))
 }
 
 fn read_cache(path: &Path) -> Result<UpdateCache> {

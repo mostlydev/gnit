@@ -6,25 +6,25 @@ Accepted.
 
 ## Decision
 
-Nit reuses Git verbs where they are clear, but it keeps new verbs when they name
+Gnit reuses Git verbs where they are clear, but it keeps new verbs when they name
 human-important operations that would otherwise hide behind easy-to-forget
 arguments.
 
 The canonical publish flow is:
 
 ```sh
-nit add -A
-nit land -m "Publish change"
-nit push
+gnit add -A
+gnit land -m "Publish change"
+gnit push
 ```
 
-`nit land` remains canonical because it names a distinct transaction: commit
+`gnit land` remains canonical because it names a distinct transaction: commit
 staged member changes, create an unnamed Pin, and prepare ordered push. The
-decomposed form remains available as `nit commit -m <msg>` followed by
-`nit pin <name>` when separate steps are intentional.
+decomposed form remains available as `gnit commit -m <msg>` followed by
+`gnit pin <name>` when separate steps are intentional.
 
 New members are created with plain `git init` or `git clone`, then registered
-with `nit adopt`.
+with `gnit adopt`.
 
 ## Rationale
 

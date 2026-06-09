@@ -10,8 +10,8 @@ use crate::workspace;
 
 pub fn checkout(spec: String, exact: bool) -> Result<()> {
     let cwd = env::current_dir()?;
-    let root = workspace::find_nit_workspace(&cwd)
-        .context("not in a Nit workspace; run `nit init` first")?;
+    let root = workspace::find_gnit_workspace(&cwd)
+        .context("not in a Gnit workspace; run `gnit init` first")?;
     checkout_in(root, spec, exact)
 }
 

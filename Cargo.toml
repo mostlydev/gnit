@@ -1,10 +1,10 @@
 [package]
-name = "nit"
+name = "gnit"
 version = "0.8.2"
 edition = "2021"
 description = "Git-native multi-repo workspaces"
 license = "MIT"
-repository = "https://github.com/mostlydev/nit"
+repository = "https://github.com/mostlydev/gnit"
 
 [dependencies]
 anyhow = "1.0"

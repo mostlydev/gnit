@@ -8,13 +8,13 @@ use crate::metadata::Pin;
 use crate::workspace;
 
 pub fn review(target: String) -> Result<()> {
-    if target.starts_with("NCH-") {
+    if target.starts_with("GCH-") {
         return change::diff(target);
     }
 
     let cwd = env::current_dir()?;
-    let root = workspace::find_nit_workspace(&cwd)
-        .context("not in a Nit workspace; run `nit init` first")?;
+    let root = workspace::find_gnit_workspace(&cwd)
+        .context("not in a Gnit workspace; run `gnit init` first")?;
     let pin = Pin::load(&root, &target)?;
 
     println!("Review Pin {}", pin.id);
@@ -42,7 +42,7 @@ pub fn review(target: String) -> Result<()> {
             ["cat-file", "-e", &format!("{}^{{commit}}", member.commit)],
         )? {
             println!(
-                "commit not available locally; run `nit checkout {}` or `git -C {} fetch origin`",
+                "commit not available locally; run `gnit checkout {}` or `git -C {} fetch origin`",
                 pin.id,
                 member_root.display()
             );

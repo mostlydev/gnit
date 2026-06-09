@@ -9,17 +9,17 @@ use crate::git;
 use crate::metadata::{Pin, Roster, PINS_DIR};
 use crate::workspace;
 
-/// Rich, grouped `nit status`: root/member staged/unstaged/untracked counts,
+/// Rich, grouped `gnit status`: root/member staged/unstaged/untracked counts,
 /// branch, missing members, member drift from the current pin, and discovered-
 /// but-unadopted nested repos. Falls back to a clear message outside a workspace.
 pub fn status() -> Result<()> {
     let cwd = env::current_dir()?;
-    let Some(root) = workspace::find_nit_workspace(&cwd) else {
-        println!("No Nit workspace found.");
+    let Some(root) = workspace::find_gnit_workspace(&cwd) else {
+        println!("No Gnit workspace found.");
         if let Some(git_root) = git::root(&cwd) {
             println!("Git root: {}", git_root.display());
         }
-        println!("Run `nit init` to create one.");
+        println!("Run `gnit init` to create one.");
         return Ok(());
     };
 
@@ -39,7 +39,7 @@ pub fn status() -> Result<()> {
     println!("\nRepos");
     let mut listed = false;
     // The root repo participates in workspace commits, so show its own state
-    // first. `.nit/` metadata stays out of this line to match `nit add -A`.
+    // first. `.gnit/` metadata stays out of this line to match `gnit add -A`.
     if git::is_git_repo_root(&root) {
         let line = repo_line(&root, "root", true, current_pin.as_ref());
         println!("  {:<10}  {}", "root", line);
@@ -52,14 +52,14 @@ pub fn status() -> Result<()> {
         listed = true;
     }
     if !listed {
-        println!("  (none yet -- run `nit adopt <repo>`)");
+        println!("  (none yet -- run `gnit adopt <repo>`)");
     }
 
     let discovered = discover_unadopted(&root, &roster);
     if !discovered.is_empty() {
         println!("\nDiscovered (not adopted)");
         for path in discovered {
-            println!("  {:<10}  -> nit adopt {path} | nit ignore {path}", path);
+            println!("  {:<10}  -> gnit adopt {path} | gnit ignore {path}", path);
         }
     }
 
@@ -68,7 +68,7 @@ pub fn status() -> Result<()> {
 
 fn repo_line(repo_root: &Path, id: &str, is_root: bool, pin: Option<&Pin>) -> String {
     if !repo_root.exists() {
-        return "missing locally  -> nit checkout <pin>".to_string();
+        return "missing locally  -> gnit checkout <pin>".to_string();
     }
     if !git::is_git_repo_root(repo_root) {
         return "not a git repo".to_string();
@@ -85,12 +85,12 @@ fn repo_line(repo_root: &Path, id: &str, is_root: bool, pin: Option<&Pin>) -> St
 
     let work = match git::output_in(repo_root, ["status", "--porcelain"]) {
         Ok(porcelain) => {
-            // The root tracks `.nit/` metadata; exclude it so the line reflects
-            // the root's *code* state, matching what `nit add -A`/`nit commit` do.
+            // The root tracks `.gnit/` metadata; exclude it so the line reflects
+            // the root's *code* state, matching what `gnit add -A`/`gnit commit` do.
             let text = if is_root {
                 porcelain
                     .lines()
-                    .filter(|line| !is_nit_entry(line))
+                    .filter(|line| !is_gnit_entry(line))
                     .map(|line| format!("{line}\n"))
                     .collect::<String>()
             } else {
@@ -112,11 +112,11 @@ fn repo_line(repo_root: &Path, id: &str, is_root: bool, pin: Option<&Pin>) -> St
     format!("{work}   {on}{drift}")
 }
 
-/// True for a `git status --porcelain` line whose path is the Nit metadata dir.
-fn is_nit_entry(porcelain_line: &str) -> bool {
+/// True for a `git status --porcelain` line whose path is the Gnit metadata dir.
+fn is_gnit_entry(porcelain_line: &str) -> bool {
     porcelain_line
         .get(3..)
-        .map(|path| path == ".nit" || path.starts_with(".nit/"))
+        .map(|path| path == ".gnit" || path.starts_with(".gnit/"))
         .unwrap_or(false)
 }
 
@@ -155,7 +155,7 @@ fn describe_worktree(porcelain: &str) -> String {
     parts.join(", ")
 }
 
-/// The newest pin in `.nit/pins/` by id (ids embed a millis timestamp, so the
+/// The newest pin in `.gnit/pins/` by id (ids embed a millis timestamp, so the
 /// lexicographically greatest id is the most recent).
 pub fn newest_pin(root: &Path) -> Result<Option<Pin>> {
     let pins_dir = root.join(PINS_DIR);
@@ -209,7 +209,7 @@ fn walk(
             continue;
         }
         let name = entry.file_name();
-        if name == ".git" || name == ".nit" {
+        if name == ".git" || name == ".gnit" {
             continue;
         }
         if ignored.contains(&path) {

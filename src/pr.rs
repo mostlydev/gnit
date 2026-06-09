@@ -12,9 +12,9 @@ use crate::git;
 use crate::metadata::{Pin, Roster};
 use crate::workspace;
 
-const TRAILER: &str = "Nit-Change-Id";
-const MARKER_START: &str = "<!-- nit-pr-sync:start -->";
-const MARKER_END: &str = "<!-- nit-pr-sync:end -->";
+const TRAILER: &str = "Gnit-Change-Id";
+const MARKER_START: &str = "<!-- gnit-pr-sync:start -->";
+const MARKER_END: &str = "<!-- gnit-pr-sync:end -->";
 const MIN_GH_VERSION: (u64, u64, u64) = (2, 0, 0);
 
 pub fn status(args: PrStatusArgs) -> Result<()> {
@@ -81,7 +81,7 @@ pub fn open(args: PrOpenArgs) -> Result<()> {
 
     if !failures.is_empty() {
         bail!(
-            "pr open incomplete; resolve failures and rerun `nit pr open{}`",
+            "pr open incomplete; resolve failures and rerun `gnit pr open{}`",
             selector_hint(&projection)
         );
     }
@@ -113,7 +113,7 @@ pub fn open(args: PrOpenArgs) -> Result<()> {
     }
     if !update_failures.is_empty() {
         bail!(
-            "pr body update incomplete; resolve failures and rerun `nit pr open{}`: {}",
+            "pr body update incomplete; resolve failures and rerun `gnit pr open{}`: {}",
             selector_hint(&projection),
             update_failures.join("; ")
         );
@@ -226,7 +226,7 @@ struct GhPr {
 
 fn current_root() -> Result<PathBuf> {
     let cwd = env::current_dir()?;
-    workspace::find_nit_workspace(&cwd).context("not in a Nit workspace; run `nit init` first")
+    workspace::find_gnit_workspace(&cwd).context("not in a Gnit workspace; run `gnit init` first")
 }
 
 fn build_projection(root: &Path, options: &ResolveOptions) -> Result<Projection> {
@@ -309,7 +309,7 @@ fn build_projection(root: &Path, options: &ResolveOptions) -> Result<Projection>
 
     if participants.is_empty() {
         bail!(
-            "change {change_id} has no commits on the current PR branch; run `nit change show {change_id}` to inspect it"
+            "change {change_id} has no commits on the current PR branch; run `gnit change show {change_id}` to inspect it"
         );
     }
 
@@ -319,7 +319,7 @@ fn build_projection(root: &Path, options: &ResolveOptions) -> Result<Projection>
             id: pin.id,
             label: pin.label,
         }),
-        title: title.unwrap_or_else(|| "Nit workspace change".to_string()),
+        title: title.unwrap_or_else(|| "Gnit workspace change".to_string()),
         participants,
     };
 
@@ -346,10 +346,10 @@ fn resolve_pin(root: &Path, pin: Option<&str>) -> Result<Option<ResolvedPin>> {
             change_id: change.clone(),
         })),
         [] => bail!(
-            "pin {spec} does not record a provenance Change; rerun with `nit pr --change <id>`"
+            "pin {spec} does not record a provenance Change; rerun with `gnit pr --change <id>`"
         ),
         changes => bail!(
-            "pin {spec} records multiple Changes ({}); rerun with one explicit `nit pr --change <id>`",
+            "pin {spec} records multiple Changes ({}); rerun with one explicit `gnit pr --change <id>`",
             changes.join(", ")
         ),
     }
@@ -404,13 +404,13 @@ fn project_repo(repo: &RepoInfo, options: &ResolveOptions) -> Result<LocalRepoPr
     if local_problem.is_none() {
         if branch.is_none() {
             local_problem = Some(format!(
-                "{} is detached; checkout a branch or rerun with `nit pr open --branch <name>`",
+                "{} is detached; checkout a branch or rerun with `gnit pr open --branch <name>`",
                 repo.id
             ));
         }
         if base.is_none() {
             local_problem = Some(format!(
-                "{} cannot resolve its base branch; rerun with `nit pr --base <branch>`",
+                "{} cannot resolve its base branch; rerun with `gnit pr --base <branch>`",
                 repo.id
             ));
         }
@@ -550,7 +550,7 @@ fn pin_anchors_ahead_of_base(repo: &Path, base: &str) -> Result<BTreeMap<String,
             ["diff-tree", "--no-commit-id", "--name-only", "-r", hash],
         )?;
         for file in files.lines() {
-            if !file.starts_with(".nit/pins/") || !file.ends_with(".yaml") {
+            if !file.starts_with(".gnit/pins/") || !file.ends_with(".yaml") {
                 continue;
             }
             let spec = format!("{hash}:{file}");
@@ -582,13 +582,15 @@ fn infer_current_change(repos: &[LocalRepoProjection]) -> Result<String> {
     }
     match ids.len() {
         0 => {
-            bail!("no current Nit Change found on the PR branch; rerun with `nit pr --change <id>`")
+            bail!(
+                "no current Gnit Change found on the PR branch; rerun with `gnit pr --change <id>`"
+            )
         }
         1 => Ok(ids.into_iter().next().unwrap()),
         _ => {
             let choices = ids.into_iter().collect::<Vec<_>>().join(", ");
             bail!(
-                "multiple Nit Changes found on the PR branch ({choices}); rerun with `nit pr --change <id>`"
+                "multiple Gnit Changes found on the PR branch ({choices}); rerun with `gnit pr --change <id>`"
             )
         }
     }
@@ -643,7 +645,7 @@ fn find_pr(participant: &Participant, change_id: &str) -> Result<Option<PullRequ
         .collect::<Vec<_>>();
     if marker_matches.len() > 1 {
         bail!(
-            "multiple PRs in {repo} contain {TRAILER}: {change_id}; close or edit duplicates, then rerun `nit pr`"
+            "multiple PRs in {repo} contain {TRAILER}: {change_id}; close or edit duplicates, then rerun `gnit pr`"
         );
     }
     if let Some(pr) = marker_matches.into_iter().next() {
@@ -658,7 +660,7 @@ fn find_pr(participant: &Participant, change_id: &str) -> Result<Option<PullRequ
         0 => Ok(None),
         1 => Ok(head_matches.into_iter().next()),
         _ => bail!(
-            "multiple PRs in {repo} use head branch {branch}; add the Nit marker to one or close duplicates"
+            "multiple PRs in {repo} use head branch {branch}; add the Gnit marker to one or close duplicates"
         ),
     }
 }
@@ -713,14 +715,14 @@ fn preflight_open(projection: &Projection) -> Result<()> {
         }
         let Some(branch) = participant.branch.as_deref() else {
             blockers.push(format!(
-                "{}: detached; checkout a branch and run `nit push`, or rerun with `nit pr open --branch <name>`",
+                "{}: detached; checkout a branch and run `gnit push`, or rerun with `gnit pr open --branch <name>`",
                 participant.id
             ));
             continue;
         };
         let Some(base) = participant.base.as_deref() else {
             blockers.push(format!(
-                "{}: base branch unknown; rerun with `nit pr open --base <branch>`",
+                "{}: base branch unknown; rerun with `gnit pr open --base <branch>`",
                 participant.id
             ));
             continue;
@@ -757,10 +759,10 @@ fn ensure_gh_available() -> Result<()> {
         .context("GitHub CLI `gh` is required; install gh and run `gh auth login`")?;
     let parsed = parse_gh_version(&version).unwrap_or((0, 0, 0));
     if parsed < MIN_GH_VERSION {
-        bail!("GitHub CLI is too old ({version}); upgrade gh, then rerun `nit pr open`");
+        bail!("GitHub CLI is too old ({version}); upgrade gh, then rerun `gnit pr open`");
     }
     gh_output(None, ["auth", "status"])
-        .context("GitHub auth unavailable; run `gh auth login`, then rerun `nit pr open`")?;
+        .context("GitHub auth unavailable; run `gh auth login`, then rerun `gnit pr open`")?;
     Ok(())
 }
 
@@ -769,7 +771,7 @@ fn verify_remote_branch(participant: &Participant, branch: &str) -> Result<()> {
     let remote = git::output_in_args(&participant.root, ["ls-remote", "origin", &remote_ref])
         .with_context(|| {
             format!(
-                "cannot read origin/{branch}; run `nit push` from {}",
+                "cannot read origin/{branch}; run `gnit push` from {}",
                 participant.root.display()
             )
         })?;
@@ -777,7 +779,7 @@ fn verify_remote_branch(participant: &Participant, branch: &str) -> Result<()> {
     let local_head = participant.head.as_deref().context("missing local HEAD")?;
     if remote_head != Some(local_head) {
         bail!(
-            "origin/{branch} is not at local HEAD {}; run `nit push` before `nit pr open`",
+            "origin/{branch} is not at local HEAD {}; run `gnit push` before `gnit pr open`",
             short(local_head)
         );
     }
@@ -947,7 +949,7 @@ fn marker_block(projection: &Projection) -> String {
     text.push_str(&format!("{TRAILER}: {}\n", projection.change_id));
     if let Some(pin) = &projection.pin {
         text.push_str(&format!(
-            "Nit-Pin: {}\n",
+            "Gnit-Pin: {}\n",
             pin.label.as_deref().unwrap_or(&pin.id)
         ));
     }
@@ -973,14 +975,14 @@ fn marker_block(projection: &Projection) -> String {
         ));
     }
     text.push_str("\nRecover:\n");
-    text.push_str("  nit pr\n");
+    text.push_str("  gnit pr\n");
     text.push_str(MARKER_END);
     text
 }
 
 fn provisional_marker(change_id: &str, participant: &Participant) -> String {
     format!(
-        "{MARKER_START}\n{TRAILER}: {change_id}\n\nCommits:\n- {}: {} @ {}\n\nRecover:\n  nit pr\n{MARKER_END}",
+        "{MARKER_START}\n{TRAILER}: {change_id}\n\nCommits:\n- {}: {} @ {}\n\nRecover:\n  gnit pr\n{MARKER_END}",
         participant.id,
         participant.path,
         short(&participant.participant_commit)
@@ -1086,7 +1088,7 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<std::ffi::OsStr>,
 {
-    let bin = env::var("NIT_GH_BIN").unwrap_or_else(|_| "gh".to_string());
+    let bin = env::var("GNIT_GH_BIN").unwrap_or_else(|_| "gh".to_string());
     let mut command = Command::new(bin);
     if let Some(dir) = dir {
         command.current_dir(dir);
@@ -1104,7 +1106,7 @@ where
 
 fn trailer_value(body: &str) -> Option<String> {
     body.lines()
-        .find_map(|line| line.trim().strip_prefix("Nit-Change-Id: "))
+        .find_map(|line| line.trim().strip_prefix("Gnit-Change-Id: "))
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)

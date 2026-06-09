@@ -8,7 +8,7 @@ Accepted. Implementation in progress for v0.6.0.
 
 Agent harnesses (Claude Code, Codex, OpenCode, Grok) load "skills" — small
 instruction bundles — from a per-harness directory. A skill that teaches a
-harness how to drive Nit lets agents use the change/pin/checkout/push workflow
+harness how to drive Gnit lets agents use the change/pin/checkout/push workflow
 correctly instead of guessing at raw Git.
 
 Talking Stick solves the same problem with `tt install <harness>`, which links
@@ -16,38 +16,38 @@ its bundled `skills/talking-stick/` into each harness's skills directory. That
 works because `tt` is distributed as an npm package whose files, including the
 skill source, are present on disk for every install.
 
-Nit is different. It ships as a single binary: `install.sh` and the release
-tarball move only the `nit` executable, so there is no on-disk `skills/`
+Gnit is different. It ships as a single binary: `install.sh` and the release
+tarball move only the `gnit` executable, so there is no on-disk `skills/`
 directory for an installed user to link against. A design that symlinks harness
 directories straight at a repository path would only work for developers with a
 checkout.
 
 ## Decision
 
-Nit gains a `nit skills` command group that installs a bundled agent skill into
-supported harnesses. The skill source of truth lives at `skills/nit/SKILL.md`
+Gnit gains a `gnit skills` command group that installs a bundled agent skill into
+supported harnesses. The skill source of truth lives at `skills/gnit/SKILL.md`
 in the repository and is compiled into the binary with `include_str!`, so every
 build carries its own copy.
 
-- `nit skills install [<harness>...] [--all] [--copy|--link] [--print]`
-- `nit skills uninstall [<harness>...] [--all] [--print]`
-- `nit skills list` reports per-harness state (linked, copied, absent, stale).
+- `gnit skills install [<harness>...] [--all] [--copy|--link] [--print]`
+- `gnit skills uninstall [<harness>...] [--all] [--print]`
+- `gnit skills list` reports per-harness state (linked, copied, absent, stale).
 
 ### Managed source
 
-On install, Nit first materializes a **managed source** from the embedded
-content at `<data>/skills/nit/SKILL.md`, where `<data>` is the first of
-`$NIT_DATA_DIR`, `$XDG_DATA_HOME/nit`, or `~/.local/share/nit`. If the embedded
+On install, Gnit first materializes a **managed source** from the embedded
+content at `<data>/skills/gnit/SKILL.md`, where `<data>` is the first of
+`$GNIT_DATA_DIR`, `$XDG_DATA_HOME/gnit`, or `~/.local/share/gnit`. If the embedded
 content differs from what is on disk, the managed source is refreshed. This is
 the single point of truth on the user's machine.
 
 ### Link vs copy
 
 - `--link` (default) symlinks each harness skill directory to the managed
-  source. One `nit skills install` after a `nit update` refreshes every linked
-  harness at once. This keeps Nit consistent with Talking Stick's link-default
+  source. One `gnit skills install` after a `gnit update` refreshes every linked
+  harness at once. This keeps Gnit consistent with Talking Stick's link-default
   while still working for binary-only installs, because the symlink target is a
-  stable Nit-owned location rather than a repository path.
+  stable Gnit-owned location rather than a repository path.
 - `--copy` writes an independent copy of the skill into each harness directory.
   Use it when symlinks are undesirable.
 
@@ -55,50 +55,50 @@ the single point of truth on the user's machine.
 
 | Harness | Skill directory | Aliases |
 | --- | --- | --- |
-| Claude Code | `~/.claude/skills/nit` | `claude`, `claude-code` |
-| Codex | `~/.codex/skills/nit` | `codex` |
-| OpenCode | `~/.opencode/skills/nit` | `opencode` |
-| Grok | `${GROK_HOME:-~/.grok}/skills/nit` | `grok`, `grok-build` |
+| Claude Code | `~/.claude/skills/gnit` | `claude`, `claude-code` |
+| Codex | `~/.codex/skills/gnit` | `codex` |
+| OpenCode | `~/.opencode/skills/gnit` | `opencode` |
+| Grok | `${GROK_HOME:-~/.grok}/skills/gnit` | `grok`, `grok-build` |
 
 Gemini is deferred: its skills are registry-managed through `gemini skills
 link`, which needs the Gemini CLI and a different mechanism.
 
 ### Resolution, detection, and safety
 
-- All roots are environment-overridable (`HOME`, `XDG_DATA_HOME`, `NIT_DATA_DIR`,
+- All roots are environment-overridable (`HOME`, `XDG_DATA_HOME`, `GNIT_DATA_DIR`,
   `GROK_HOME`) so the behavior is testable in a sandboxed home.
 - `--all` targets only **detected** harnesses (those whose base config
   directory exists) and reports the rest as skipped.
 - An explicitly named harness is always installed; its skill directory parents
   are created as needed. If the harness's base directory did not already exist,
   the run says so rather than failing.
-- Nit never silently clobbers. If a harness skill directory already exists and
-  is not a symlink Nit owns (a real directory, or a symlink pointing elsewhere),
+- Gnit never silently clobbers. If a harness skill directory already exists and
+  is not a symlink Gnit owns (a real directory, or a symlink pointing elsewhere),
   the install reports it and leaves it untouched unless `--force` is given.
 - `--print` makes no changes and prints the planned actions per harness.
-- `nit skills uninstall` removes the harness entry. The managed source is left
+- `gnit skills uninstall` removes the harness entry. The managed source is left
   in place; it is small and harmless, and a later install reuses it.
 
 ### Explicit, never automatic
 
-Installing a skill is always an explicit `nit skills install`. Nit does not
+Installing a skill is always an explicit `gnit skills install`. Gnit does not
 auto-install or silently re-align skills on ordinary commands, consistent with
-the project rule that Nit changes the user's machine only when asked.
+the project rule that Gnit changes the user's machine only when asked.
 
 ## Consequences
 
-- Installed binary users, not just developers, can run `nit skills install`.
-- A single `nit update` plus `nit skills install` refreshes every linked
+- Installed binary users, not just developers, can run `gnit skills install`.
+- A single `gnit update` plus `gnit skills install` refreshes every linked
   harness from one managed source.
 - The skill content rides inside the binary, so it is always version-matched to
-  the running Nit and needs no separate download.
+  the running Gnit and needs no separate download.
 - Grok's session-hook machinery is intentionally not reproduced; that is Talking
   Stick identity wiring, not skill distribution.
 
 ## Rejected Alternative
 
 Symlink harness directories directly at a repository or package `skills/` path,
-as `tt` does. Rejected because Nit's release tarball ships only the `nit`
+as `tt` does. Rejected because Gnit's release tarball ships only the `gnit`
 binary, so that path does not exist for installed users. The managed-source
 indirection keeps the link-default ergonomics without assuming a checkout.
 

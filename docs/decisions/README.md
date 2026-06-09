@@ -1,6 +1,6 @@
 # Decisions
 
-Locked product and architecture decisions for Nit.
+Locked product and architecture decisions for Gnit.
 
 - [0001-name-and-scope.md](0001-name-and-scope.md)
 - [0002-change-and-pin.md](0002-change-and-pin.md)
@@ -14,3 +14,5 @@ Locked product and architecture decisions for Nit.
 - [0010-strict-push-resume.md](0010-strict-push-resume.md)
 - [0011-skill-distribution.md](0011-skill-distribution.md)
 - [0012-pr-flow.md](0012-pr-flow.md)
+- [0013-agent-guidance.md](0013-agent-guidance.md)
+- [0014-rename-to-gnit.md](0014-rename-to-gnit.md)

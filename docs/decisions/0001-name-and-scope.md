@@ -6,9 +6,9 @@ Accepted.
 
 ## Decision
 
-The product name is `nit`.
+The product name is `gnit`.
 
-Nit v1 is a Git-native workspace layer for changes that span multiple
+Gnit v1 is a Git-native workspace layer for changes that span multiple
 independent repositories. It is not a replacement VCS and does not merge member
 repositories into one history.
 

@@ -6,23 +6,23 @@ Accepted. Implemented for v0.5.0.
 
 ## Context
 
-Multi-repo push is not atomic. Nit must push member repositories before the
+Multi-repo push is not atomic. Gnit must push member repositories before the
 workspace root/control repo, because root metadata can contain Pins that
 reference member commits.
 
-The first `nit push --resume` implementation was only a banner. The command was
+The first `gnit push --resume` implementation was only a banner. The command was
 accidentally idempotent when every repo had already landed, but a real partial
 push failure still left users without a report of what landed, what failed, and
 what was intentionally held back.
 
 ## Decision
 
-`nit push` has one strict ordered policy. `nit push --resume` is an explicit
+`gnit push` has one strict ordered policy. `gnit push --resume` is an explicit
 retry spelling for the same policy, not a second push mode.
 
 - The ordered plan is all roster members in roster order, then the workspace
   root/control repo.
-- Remote refs are the resume journal; Nit does not write persistent push state.
+- Remote refs are the resume journal; Gnit does not write persistent push state.
 - Preflight checks every target for a branch, an `origin`, and a reachable remote.
 - Already-landed repos are skipped by comparing local `HEAD` to the remote branch
   tip.
@@ -32,23 +32,23 @@ retry spelling for the same policy, not a second push mode.
 - If root metadata contains Pins for current roster members, each pinned member
   commit must be reachable from the corresponding local member `HEAD` or from an
   `origin/*` remote-tracking ref before the root can be pushed.
-- Non-fast-forward rejection is a hard failure; Nit never forces.
+- Non-fast-forward rejection is a hard failure; Gnit never forces.
 - Every run prints a report that lists pushed, already-landed, failed,
   not-attempted, and held-back targets.
 - The command exits non-zero unless every target is landed.
 
 ## Consequences
 
-- A failed push can be retried with either `nit push` or `nit push --resume`.
+- A failed push can be retried with either `gnit push` or `gnit push --resume`.
 - A partial landing is visible instead of hidden behind the first Git error.
-- Nit does not publish a Pin that points at a current member commit unreachable
+- Gnit does not publish a Pin that points at a current member commit unreachable
   from local `HEAD` or `origin/*`.
 - Retained historical Pins for retired members do not block today's root push.
 - Humans have one push policy to learn.
 
 ## Rejected Alternative
 
-`nit push --resume` could have been a best-effort mode that skips already-landed
+`gnit push --resume` could have been a best-effort mode that skips already-landed
 members, continues past new member failures, and pushes every still-pushable
 member while still holding the root back.
 

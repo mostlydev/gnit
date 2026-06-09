@@ -6,11 +6,11 @@ use anyhow::{bail, Context, Result};
 
 use crate::cli::{SkillsInstallArgs, SkillsUninstallArgs};
 
-const SKILL_NAME: &str = "nit";
+const SKILL_NAME: &str = "gnit";
 const SKILL_FILE: &str = "SKILL.md";
-const OWNERSHIP_MARKER: &str = ".nit-skill-managed";
-const OWNERSHIP_MARKER_CONTENT: &str = "nit\n";
-const BUNDLED_SKILL: &str = include_str!("../skills/nit/SKILL.md");
+const OWNERSHIP_MARKER: &str = ".gnit-skill-managed";
+const OWNERSHIP_MARKER_CONTENT: &str = "gnit\n";
+const BUNDLED_SKILL: &str = include_str!("../skills/gnit/SKILL.md");
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum Harness {
@@ -116,7 +116,7 @@ pub fn uninstall(args: SkillsUninstallArgs) -> Result<()> {
 pub fn list() -> Result<()> {
     let paths = Paths::resolve()?;
     let managed_source = managed_source_dir(&paths);
-    println!("Nit skills");
+    println!("Gnit skills");
     println!("  managed source: {}", managed_source.display());
     for harness in Harness::ALL {
         let base_dir = harness.base_dir(&paths);
@@ -198,7 +198,7 @@ fn managed_source_dir(paths: &Paths) -> PathBuf {
 fn materialize_managed_source(managed_source: &Path) -> Result<()> {
     prepare_dir(managed_source).with_context(|| {
         format!(
-            "prepare managed Nit skill source {}",
+            "prepare managed Gnit skill source {}",
             managed_source.display()
         )
     })?;
@@ -222,7 +222,7 @@ fn install_target(
             harness: target.harness,
             status: "failed",
             message: format!(
-                "{} already exists and is not managed by Nit; rerun with --force to replace it",
+                "{} already exists and is not managed by Gnit; rerun with --force to replace it",
                 target.target_dir.display()
             ),
             ok: false,
@@ -330,7 +330,7 @@ fn uninstall_target(target: &Target, managed_source: &Path) -> Result<ActionResu
             harness: target.harness,
             status: "failed",
             message: format!(
-                "{} exists but is not managed by Nit; leaving it untouched",
+                "{} exists but is not managed by Gnit; leaving it untouched",
                 target.target_dir.display()
             ),
             ok: false,
@@ -591,7 +591,7 @@ fn home_dir() -> Result<PathBuf> {
 }
 
 fn data_dir(home: &Path) -> PathBuf {
-    if let Some(path) = env_path("NIT_DATA_DIR") {
+    if let Some(path) = env_path("GNIT_DATA_DIR") {
         return path;
     }
     if let Some(path) = env_path("XDG_DATA_HOME") {
