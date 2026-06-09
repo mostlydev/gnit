@@ -1,4 +1,5 @@
 use std::env;
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -7,6 +8,14 @@ use anyhow::{bail, Context, Result};
 
 use crate::git;
 use crate::metadata::{Roster, RosterMember, ROSTER_PATH};
+
+const AGENT_GUIDANCE_START: &str = "<!-- nit:workspace:start -->";
+const AGENT_GUIDANCE_BLOCK: &str = r#"<!-- nit:workspace:start -->
+> **Nit workspace** — this repository is one of several Git repos coordinated by Nit.
+> For changes that span more than one repo, drive them with the `nit` CLI and the Nit
+> skill (run `nit --help`) instead of hand-managing submodules or raw `git` across repos.
+<!-- nit:workspace:end -->
+"#;
 
 pub fn init(control: bool, local: bool, remote: Option<String>) -> Result<()> {
     let cwd = env::current_dir()?;
@@ -30,6 +39,11 @@ pub fn init(control: bool, local: bool, remote: Option<String>) -> Result<()> {
         "shared"
     };
     Roster::new(mode, remote).write(&cwd)?;
+    let agent_guidance = ensure_agent_guidance(&cwd)?;
+
+    if !local {
+        commit_metadata_with_paths(&cwd, "Initialize Nit workspace", &agent_guidance).ok();
+    }
 
     println!("initialized Nit workspace");
     println!("  root: {}", cwd.display());
@@ -118,6 +132,13 @@ pub fn doctor() -> Result<()> {
             println!("  roster members: {}", roster.members.len());
             repair_required_excludes(&root, &roster)?;
             println!("  exclude repair: ok");
+            let guidance_added = ensure_agent_guidance(&root)?;
+            let guidance_status = if guidance_added.is_empty() {
+                "ok"
+            } else {
+                "added"
+            };
+            println!("  agent guidance: {guidance_status}");
             report_member_health(&root, &roster)?;
             report_pin_health(&root)?;
         }
@@ -260,6 +281,57 @@ pub(crate) fn repair_required_excludes(root: &Path, roster: &Roster) -> Result<u
     Ok(added)
 }
 
+pub(crate) fn ensure_agent_guidance(root: &Path) -> Result<Vec<PathBuf>> {
+    let targets = agent_guidance_targets(root);
+    let mut changed = Vec::new();
+    for rel in targets {
+        let path = root.join(&rel);
+        let mut text = match fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(err) => {
+                return Err(err).with_context(|| format!("read agent guidance {}", path.display()));
+            }
+        };
+        if text.contains(AGENT_GUIDANCE_START) {
+            continue;
+        }
+        append_agent_guidance(&mut text);
+        fs::write(&path, text)
+            .with_context(|| format!("write agent guidance {}", path.display()))?;
+        changed.push(rel);
+    }
+    Ok(changed)
+}
+
+fn agent_guidance_targets(root: &Path) -> Vec<PathBuf> {
+    let agents = PathBuf::from("AGENTS.md");
+    let claude = PathBuf::from("CLAUDE.md");
+    let mut targets = Vec::new();
+    if root.join(&agents).exists() {
+        targets.push(agents.clone());
+    }
+    if root.join(&claude).exists() {
+        targets.push(claude);
+    }
+    if targets.is_empty() {
+        targets.push(agents);
+    }
+    targets
+}
+
+fn append_agent_guidance(text: &mut String) {
+    if !text.is_empty() {
+        if !text.ends_with('\n') {
+            text.push('\n');
+        }
+        if !text.ends_with("\n\n") {
+            text.push('\n');
+        }
+    }
+    text.push_str(AGENT_GUIDANCE_BLOCK);
+}
+
 fn append_exclude(text: &mut String, entry: &str) -> usize {
     if text.lines().any(|line| line == entry) {
         return 0;
@@ -326,17 +398,40 @@ fn report_pin_health(root: &Path) -> Result<()> {
 }
 
 pub(crate) fn commit_metadata(root: &Path, message: &str) -> Result<()> {
+    commit_metadata_with_paths(root, message, &[])
+}
+
+fn commit_metadata_with_paths(root: &Path, message: &str, extra_paths: &[PathBuf]) -> Result<()> {
     if !git::is_git_repo(root) {
         return Ok(());
     }
 
     // Local excludes (.git/info/exclude) are intentionally local; never committed.
-    git::output_in(root, ["add", ".nit"])?;
-    let status = git::output_in(root, ["status", "--porcelain", "--", ".nit"])?;
+    let mut paths = vec![PathBuf::from(".nit")];
+    paths.extend(extra_paths.iter().cloned());
+
+    let mut add_args = vec![OsString::from("add")];
+    add_args.extend(paths.iter().map(|path| path.as_os_str().to_os_string()));
+    git::output_in_args(root, add_args)?;
+
+    let mut status_args = vec![
+        OsString::from("status"),
+        OsString::from("--porcelain"),
+        OsString::from("--"),
+    ];
+    status_args.extend(paths.iter().map(|path| path.as_os_str().to_os_string()));
+    let status = git::output_in_args(root, status_args)?;
     if !status.trim().is_empty() {
-        // Pathspec-scope the commit to .nit so an unrelated staged change in the
-        // root repo is never swept into the Nit metadata commit.
-        git::output_in(root, ["commit", "-m", message, "--", ".nit"])?;
+        // Pathspec-scope the commit so an unrelated staged change in the root
+        // repo is never swept into the Nit metadata commit.
+        let mut commit_args = vec![
+            OsString::from("commit"),
+            OsString::from("-m"),
+            OsString::from(message),
+            OsString::from("--"),
+        ];
+        commit_args.extend(paths.iter().map(|path| path.as_os_str().to_os_string()));
+        git::output_in_args(root, commit_args)?;
     }
     Ok(())
 }
