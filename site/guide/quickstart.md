@@ -31,6 +31,10 @@ nit pin baseline
 nit push
 ```
 
+`nit init` also drops a short Nit workspace note into `AGENTS.md` (and `CLAUDE.md`
+if you keep one) so coding agents reach for the `nit` CLI and skill instead of
+hand-managing the member repos. `nit doctor` re-adds it if it ever goes missing.
+
 ## Publish A Cross-Repo Change
 
 ```sh

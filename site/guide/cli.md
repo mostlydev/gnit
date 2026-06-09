@@ -40,8 +40,9 @@ workspace paths, commit staged root/member changes under one `Nit-Change-Id`,
 land a change with a Pin, inspect trailer-based changes, record committed member
 HEADs as a Pin, materialize Pins with safe checkout defaults, push members
 before workspace metadata, create/adopt linked GitHub PRs, render combined
-review output, repair local excludes with `doctor`, follow the explicit update
-path, and install its bundled agent skill into supported harnesses.
+review output, repair local excludes and refresh agent guidance with `doctor`,
+follow the explicit update path, and install its bundled agent skill into
+supported harnesses.
 
 The v0 human workflow is intentionally small:
 
@@ -72,6 +73,12 @@ nit review <change|pin>
 `nit land` is the commit-plus-pin publish verb. The decomposed form is
 `nit commit -m <msg>` followed by `nit pin <name>` when you intentionally want
 separate steps.
+
+`nit add` and `nit commit` honor the Git index in every member, root included:
+`nit commit` records exactly what you staged and leaves unstaged tracked changes
+in place, so you can split independent work into separate Changes from one dirty
+worktree. Staged workspace metadata under `.nit` is never folded into a Change —
+Nit commits its own metadata separately and tells you to unstage it if you try.
 
 `nit push` publishes members first and the workspace root/control repo last. It
 prints a report for every target: pushed, already landed, failed, not attempted,
@@ -171,3 +178,15 @@ source under the Nit data directory; `--copy` writes standalone snapshots.
 names such as `claude`, `codex`, `opencode`, or `grok-build` create their
 missing harness directories as needed. Nit never clobbers a non-Nit-owned
 `skills/nit` target unless `--force` is passed.
+
+`nit init` also writes a short, version-stable workspace note into the repo's
+agent-instruction docs — `AGENTS.md`, plus `CLAUDE.md` when that file already
+exists — so any agent reading the file it scans first learns to drive cross-repo
+work with the `nit` CLI and skill instead of hand-managing repos with raw Git.
+The note is bounded by `<!-- nit:workspace:start -->` / `<!-- nit:workspace:end
+-->` markers, so re-running never duplicates it and any edits you make inside the
+block survive. `nit doctor` reports `agent guidance: ok` when the block is present
+and `agent guidance: added` when it inserts a missing one, mirroring the local
+exclude repair. The wording carries no command or version detail, so it survives
+releases without churn. Nit writes these docs only on the explicit `nit init` and
+`nit doctor` invocations — never during silent upkeep.

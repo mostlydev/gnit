@@ -9,6 +9,8 @@ The locked decisions are recorded in `docs/decisions/`:
 - Change and Pin are co-primary.
 - `nit land` is the canonical human publish verb.
 - Hooks are not installed by default.
+- A nitted repo announces itself to agents through a managed, version-stable block
+  in `AGENTS.md`/`CLAUDE.md`, written on `nit init` and repaired by `nit doctor`.
 - The public site deploys from `site/` on pushes to `master` once GitHub Pages is
   configured.
 - The CLI is Rust, distributed as a single binary, with Clawdapus-style
