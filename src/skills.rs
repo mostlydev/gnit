@@ -516,11 +516,22 @@ fn inspect_target(target: &Path, managed_source: &Path) -> Result<ExistingTarget
 
     if metadata.is_dir() {
         let marker = target.join(OWNERSHIP_MARKER);
-        let managed = fs::read_to_string(&marker)
-            .map(|text| text == OWNERSHIP_MARKER_CONTENT)
-            .unwrap_or(false);
+        let managed = match fs::read_to_string(&marker) {
+            Ok(text) => text == OWNERSHIP_MARKER_CONTENT,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+            Err(error) => return Err(error).with_context(|| format!("read {}", marker.display())),
+        };
         if managed {
-            let current = fs::read_to_string(target.join(SKILL_FILE)).unwrap_or_default();
+            let skill = target.join(SKILL_FILE);
+            let current = match fs::read_to_string(&skill) {
+                Ok(text) => text,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    return Ok(ExistingTarget::CopiedStale);
+                }
+                Err(error) => {
+                    return Err(error).with_context(|| format!("read {}", skill.display()))
+                }
+            };
             return if current == BUNDLED_SKILL {
                 Ok(ExistingTarget::CopiedCurrent)
             } else {

@@ -499,6 +499,74 @@ fn skills_install_propagates_managed_source_read_errors() {
     assert!(!env.codex_skill().exists());
 }
 
+#[test]
+fn skills_install_copy_rejects_unreadable_managed_target_skill() {
+    let env = skill_env();
+    fs::create_dir_all(env.home.join(".codex")).unwrap();
+
+    env.command(["skills", "install", "codex", "--copy"])
+        .assert()
+        .success();
+    let invalid = b"not utf8: \xff\n";
+    fs::write(env.codex_skill().join("SKILL.md"), invalid).unwrap();
+
+    env.command(["skills", "install", "codex", "--copy"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("read"))
+        .stderr(predicate::str::contains("SKILL.md"));
+
+    assert_eq!(
+        fs::read(env.codex_skill().join("SKILL.md")).unwrap(),
+        invalid
+    );
+    assert!(env.codex_skill().join(".nit-skill-managed").exists());
+}
+
+#[test]
+fn skills_install_force_rejects_unreadable_managed_target_marker() {
+    let env = skill_env();
+    fs::create_dir_all(env.home.join(".codex")).unwrap();
+
+    env.command(["skills", "install", "codex", "--copy"])
+        .assert()
+        .success();
+    let invalid = b"not utf8: \xff\n";
+    fs::write(env.codex_skill().join(".nit-skill-managed"), invalid).unwrap();
+
+    env.command(["skills", "install", "codex", "--copy", "--force"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("read"))
+        .stderr(predicate::str::contains(".nit-skill-managed"));
+
+    assert_eq!(
+        fs::read(env.codex_skill().join(".nit-skill-managed")).unwrap(),
+        invalid
+    );
+    assert!(env.codex_skill().join("SKILL.md").exists());
+}
+
+#[test]
+fn skills_install_copy_self_heals_missing_managed_target_skill() {
+    let env = skill_env();
+    fs::create_dir_all(env.home.join(".codex")).unwrap();
+
+    env.command(["skills", "install", "codex", "--copy"])
+        .assert()
+        .success();
+    fs::remove_file(env.codex_skill().join("SKILL.md")).unwrap();
+
+    env.command(["skills", "install", "codex", "--copy"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[codex] updated: copied"));
+
+    assert!(fs::read_to_string(env.codex_skill().join("SKILL.md"))
+        .unwrap()
+        .contains("# Driving Nit"));
+}
+
 #[cfg(unix)]
 #[test]
 fn skills_install_blocks_foreign_target_without_force() {
