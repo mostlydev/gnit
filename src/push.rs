@@ -321,17 +321,17 @@ fn find_unreachable_pin_member(root: &Path, roster: &Roster) -> Result<Option<St
             if !git::is_git_repo_root(&repo) {
                 continue;
             }
-            match is_ancestor(&repo, &member.commit)? {
-                AncestorCheck::Ancestor => {}
-                AncestorCheck::NotAncestor => {
+            match pin_commit_reachability(&repo, &member.commit)? {
+                PinCommitReachability::Reachable => {}
+                PinCommitReachability::Unreachable => {
                     let label = pin.label.as_deref().unwrap_or(&pin.id);
                     return Ok(Some(format!(
-                        "pin {label} references member {} commit {} not reachable from local HEAD",
+                        "pin {label} references member {} commit {} not reachable from local HEAD or origin",
                         member.id,
                         short_commit(&member.commit)
                     )));
                 }
-                AncestorCheck::Unknown(reason) => {
+                PinCommitReachability::Unknown(reason) => {
                     let label = pin.label.as_deref().unwrap_or(&pin.id);
                     return Ok(Some(format!(
                         "pin {label} references member {} commit {} but Nit could not verify it: {reason}",
@@ -346,10 +346,33 @@ fn find_unreachable_pin_member(root: &Path, roster: &Roster) -> Result<Option<St
     Ok(None)
 }
 
+enum PinCommitReachability {
+    Reachable,
+    Unreachable,
+    Unknown(String),
+}
+
 enum AncestorCheck {
     Ancestor,
     NotAncestor,
     Unknown(String),
+}
+
+fn pin_commit_reachability(repo: &Path, commit: &str) -> Result<PinCommitReachability> {
+    let head_check = is_ancestor(repo, commit)?;
+    if matches!(head_check, AncestorCheck::Ancestor) {
+        return Ok(PinCommitReachability::Reachable);
+    }
+
+    match origin_refs_contain(repo, commit)? {
+        RefContainment::Contains => Ok(PinCommitReachability::Reachable),
+        RefContainment::DoesNotContain => match head_check {
+            AncestorCheck::Ancestor => unreachable!(),
+            AncestorCheck::NotAncestor => Ok(PinCommitReachability::Unreachable),
+            AncestorCheck::Unknown(reason) => Ok(PinCommitReachability::Unknown(reason)),
+        },
+        RefContainment::Unknown(reason) => Ok(PinCommitReachability::Unknown(reason)),
+    }
 }
 
 fn is_ancestor(repo: &Path, commit: &str) -> Result<AncestorCheck> {
@@ -364,6 +387,39 @@ fn is_ancestor(repo: &Path, commit: &str) -> Result<AncestorCheck> {
         _ => Ok(AncestorCheck::Unknown(summarize_git_failure(
             &output.stderr,
         ))),
+    }
+}
+
+enum RefContainment {
+    Contains,
+    DoesNotContain,
+    Unknown(String),
+}
+
+fn origin_refs_contain(repo: &Path, commit: &str) -> Result<RefContainment> {
+    let output = Command::new("git")
+        .current_dir(repo)
+        .args([
+            "for-each-ref",
+            "--format=%(refname)",
+            "--count=1",
+            "--contains",
+            commit,
+            "refs/remotes/origin",
+        ])
+        .output()
+        .with_context(|| format!("verify origin reachability in {}", repo.display()))?;
+
+    if output.status.success() {
+        if output.stdout.iter().any(|byte| !byte.is_ascii_whitespace()) {
+            Ok(RefContainment::Contains)
+        } else {
+            Ok(RefContainment::DoesNotContain)
+        }
+    } else {
+        Ok(RefContainment::Unknown(summarize_git_failure(
+            &output.stderr,
+        )))
     }
 }
 

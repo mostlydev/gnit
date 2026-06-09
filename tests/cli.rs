@@ -1012,6 +1012,120 @@ fn push_holds_root_when_pin_commit_was_rewritten_away() {
     );
 }
 
+#[test]
+fn push_allows_historical_pin_reachable_from_origin_side_branch() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+    let sdk = workspace.join("vendor/sdk");
+
+    git(&sdk, ["checkout", "-b", "feature/historical-pin"]);
+    std::fs::write(
+        sdk.join("lib.rs"),
+        "pub fn sdk() -> &'static str { \"historical\" }\n",
+    )
+    .unwrap();
+    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    nit(
+        workspace,
+        [
+            "land",
+            "historical-side-branch",
+            "-m",
+            "Publish historical sdk update",
+        ],
+    )
+    .success();
+    let historical = git_out(&sdk, ["rev-parse", "HEAD"]);
+    git(&sdk, ["push", "-u", "origin", "HEAD"]);
+
+    git(&sdk, ["checkout", "master"]);
+    nit(workspace, ["pin", "current-master"]).success();
+
+    nit(workspace, ["push"])
+        .success()
+        .stdout(predicate::str::contains("member sdk"))
+        .stdout(predicate::str::contains("already landed"))
+        .stdout(predicate::str::contains("workspace root"))
+        .stdout(predicate::str::contains("pushed"))
+        .stdout(predicate::str::contains("push complete"));
+
+    assert_eq!(
+        git_dir_out(&fixture.root_remote, ["rev-parse", "master"]),
+        git_out(workspace, ["rev-parse", "HEAD"])
+    );
+
+    let restored = fixture._temp.path().join("restored-side-branch-pin");
+    nit(
+        fixture._temp.path(),
+        [
+            "clone",
+            fixture.root_remote.to_str().unwrap(),
+            restored.to_str().unwrap(),
+            "--pin",
+            "historical-side-branch",
+        ],
+    )
+    .success()
+    .stdout(predicate::str::contains("checked out Pin"));
+    assert_eq!(
+        git_out(&restored.join("vendor/sdk"), ["rev-parse", "HEAD"]).trim(),
+        historical.trim()
+    );
+    assert_eq!(
+        std::fs::read_to_string(restored.join("vendor/sdk/lib.rs")).unwrap(),
+        "pub fn sdk() -> &'static str { \"historical\" }\n"
+    );
+}
+
+#[test]
+fn push_holds_root_for_pin_reachable_only_from_local_branch() {
+    let fixture = workspace_with_remotes();
+    let workspace = fixture.root.as_path();
+    let sdk = workspace.join("vendor/sdk");
+
+    git(&sdk, ["checkout", "-b", "local/historical-pin"]);
+    std::fs::write(
+        sdk.join("lib.rs"),
+        "pub fn sdk() -> &'static str { \"local-only\" }\n",
+    )
+    .unwrap();
+    nit(workspace, ["add", "--repo", "sdk", "lib.rs"]);
+    nit(
+        workspace,
+        [
+            "land",
+            "local-only-side-branch",
+            "-m",
+            "Publish local-only sdk update",
+        ],
+    )
+    .success();
+    let pinned = git_out(&sdk, ["rev-parse", "HEAD"]);
+
+    git(&sdk, ["checkout", "master"]);
+    nit(workspace, ["pin", "current-master"]).success();
+
+    nit(workspace, ["push"])
+        .failure()
+        .stdout(predicate::str::contains("member sdk"))
+        .stdout(predicate::str::contains("already landed"))
+        .stdout(predicate::str::contains("workspace root"))
+        .stdout(predicate::str::contains("held back"))
+        .stdout(predicate::str::contains(
+            "pin local-only-side-branch references member sdk",
+        ))
+        .stdout(predicate::str::contains(
+            "not reachable from local HEAD or origin",
+        ))
+        .stdout(predicate::str::contains(&pinned.trim()[..12]))
+        .stderr(predicate::str::contains("push incomplete"));
+
+    assert_ne!(
+        git_dir_out(&fixture.root_remote, ["rev-parse", "master"]),
+        git_out(workspace, ["rev-parse", "HEAD"])
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn pr_open_creates_linked_draft_prs_and_rerun_does_not_duplicate() {

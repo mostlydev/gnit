@@ -30,8 +30,8 @@ retry spelling for the same policy, not a second push mode.
 - The first member failure stops later member pushes.
 - The root/control repo is pushed last and only if every member has landed.
 - If root metadata contains Pins for current roster members, each pinned member
-  commit must still be reachable from the corresponding local member `HEAD`
-  before the root can be pushed.
+  commit must be reachable from the corresponding local member `HEAD` or from an
+  `origin/*` remote-tracking ref before the root can be pushed.
 - Non-fast-forward rejection is a hard failure; Nit never forces.
 - Every run prints a report that lists pushed, already-landed, failed,
   not-attempted, and held-back targets.
