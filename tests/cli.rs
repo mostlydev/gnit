@@ -1246,7 +1246,10 @@ fn push_holds_root_for_pin_reachable_only_from_local_branch() {
             "pin local-only-side-branch references member sdk",
         ))
         .stdout(predicate::str::contains(
-            "not reachable from local HEAD or origin",
+            "reachable only from local branch local/historical-pin",
+        ))
+        .stdout(predicate::str::contains(
+            "git -C vendor/sdk push origin local/historical-pin",
         ))
         .stdout(predicate::str::contains(&pinned.trim()[..12]))
         .stderr(predicate::str::contains("push incomplete"));

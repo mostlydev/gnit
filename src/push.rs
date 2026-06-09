@@ -325,11 +325,24 @@ fn find_unreachable_pin_member(root: &Path, roster: &Roster) -> Result<Option<St
                 PinCommitReachability::Reachable => {}
                 PinCommitReachability::Unreachable => {
                     let label = pin.label.as_deref().unwrap_or(&pin.id);
-                    return Ok(Some(format!(
-                        "pin {label} references member {} commit {} not reachable from local HEAD or origin",
-                        member.id,
-                        short_commit(&member.commit)
-                    )));
+                    let report = match local_branch_containing(
+                        &repo,
+                        &member.commit,
+                        member.branch_hint.as_deref(),
+                    ) {
+                        Some(branch) => format!(
+                            "pin {label} references member {} commit {} reachable only from local branch {branch}; publish it (git -C {} push origin {branch}) and rerun `gnit push`",
+                            member.id,
+                            short_commit(&member.commit),
+                            member.path
+                        ),
+                        None => format!(
+                            "pin {label} references member {} commit {} not reachable from local HEAD or origin",
+                            member.id,
+                            short_commit(&member.commit)
+                        ),
+                    };
+                    return Ok(Some(report));
                 }
                 PinCommitReachability::Unknown(reason) => {
                     let label = pin.label.as_deref().unwrap_or(&pin.id);
@@ -421,6 +434,39 @@ fn origin_refs_contain(repo: &Path, commit: &str) -> Result<RefContainment> {
             &output.stderr,
         )))
     }
+}
+
+/// Name a local branch that contains `commit`, so the hold-back message can
+/// say exactly which ref needs publishing. Prefers the pin's recorded
+/// `branch_hint` when it still contains the commit. Gnit itself never pushes
+/// the extra branch; publishing stays an explicit operator action.
+fn local_branch_containing(repo: &Path, commit: &str, hint: Option<&str>) -> Option<String> {
+    let output = Command::new("git")
+        .current_dir(repo)
+        .args([
+            "for-each-ref",
+            "--format=%(refname:short)",
+            "--contains",
+            commit,
+            "refs/heads",
+        ])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let branches: Vec<&str> = stdout
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    if let Some(hint) = hint {
+        if branches.contains(&hint) {
+            return Some(hint.to_string());
+        }
+    }
+    branches.first().map(|branch| branch.to_string())
 }
 
 fn short_commit(commit: &str) -> &str {
