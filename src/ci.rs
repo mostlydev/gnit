@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -176,7 +176,7 @@ fn validate_pin_reachability(root: &Path, head: &str) -> Result<PinReport> {
         failures: Vec::new(),
     };
     let pins = pins_at(root, head)?;
-    let mut fetched: HashSet<PathBuf> = HashSet::new();
+    let mut fetched: HashMap<PathBuf, std::result::Result<(), String>> = HashMap::new();
 
     for path in pins {
         let pin = read_pin_at(root, head, &path)?;
@@ -231,14 +231,14 @@ fn validate_pin_reachability(root: &Path, head: &str) -> Result<PinReport> {
 
 fn fetch_origin_once(
     repo: &Path,
-    fetched: &mut HashSet<PathBuf>,
+    fetched: &mut HashMap<PathBuf, std::result::Result<(), String>>,
 ) -> std::result::Result<(), String> {
-    if fetched.contains(repo) {
-        return Ok(());
+    if let Some(result) = fetched.get(repo) {
+        return result.clone();
     }
-    fetch_origin(repo)?;
-    fetched.insert(repo.to_path_buf());
-    Ok(())
+    let result = fetch_origin(repo);
+    fetched.insert(repo.to_path_buf(), result.clone());
+    result
 }
 
 fn fetch_origin(repo: &Path) -> std::result::Result<(), String> {

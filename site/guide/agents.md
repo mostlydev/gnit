@@ -18,8 +18,9 @@ gnit skills list
 
 Supported harnesses are Claude Code, Codex, OpenCode, and Grok Build. The
 default mode is `--link`, which points each harness at Gnit's managed skill
-source so `gnit update` refreshes everyone at once. Use `--copy` for
-standalone snapshots:
+source. Re-run `gnit skills install --all` after updating the binary to refresh
+the managed source for every linked harness. Use `--copy` for standalone
+snapshots:
 
 ```sh
 gnit skills install claude codex --copy

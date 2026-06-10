@@ -27,7 +27,7 @@ features:
   - title: Pins, not pointers
     details: gnit land snapshots exact commits across repos; gnit checkout reproduces any state. No gitlink to bump, no .gitmodules to babysit.
   - title: Teach your agents once
-    details: gnit skills install puts the workflow into Claude Code, Codex, OpenCode, and Grok; gnit init leaves a guidance block in AGENTS.md. Agents drive cross-repo change instead of guessing at raw Git.
+    details: gnit skills install puts the workflow into Claude Code, Codex, OpenCode, and Grok Build; gnit init leaves a guidance block in AGENTS.md. Agents drive cross-repo change instead of guessing at raw Git.
   - title: Built for shared workspaces
     details: Advisory locking keeps concurrent gnit invocations — yours and your agents' — from racing on workspace state. Multiple agents in one workspace is the expected topology, not an edge case.
   - title: Submodules go home
