@@ -1,5 +1,6 @@
+use std::collections::HashSet;
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{bail, Context, Result};
@@ -89,8 +90,11 @@ struct PinReport {
 
 fn commits_in_range(repo: &Path, base: &str, head: &str) -> Result<Vec<Commit>> {
     let range = format!("{base}..{head}");
-    let output = git::output_in_args(repo, ["rev-list", "--reverse", range.as_str()])
-        .with_context(|| format!("list commits in {range}"))?;
+    let output = git::output_in_args(
+        repo,
+        ["rev-list", "--reverse", "--no-merges", range.as_str()],
+    )
+    .with_context(|| format!("list commits in {range}"))?;
     output
         .lines()
         .filter(|line| !line.trim().is_empty())
@@ -172,6 +176,7 @@ fn validate_pin_reachability(root: &Path, head: &str) -> Result<PinReport> {
         failures: Vec::new(),
     };
     let pins = pins_at(root, head)?;
+    let mut fetched: HashSet<PathBuf> = HashSet::new();
 
     for path in pins {
         let pin = read_pin_at(root, head, &path)?;
@@ -194,7 +199,7 @@ fn validate_pin_reachability(root: &Path, head: &str) -> Result<PinReport> {
                 ));
                 continue;
             }
-            if let Err(reason) = fetch_origin(&repo) {
+            if let Err(reason) = fetch_origin_once(&repo, &mut fetched) {
                 report.failures.push(format!(
                     "pin {} references member {} commit {} but origin could not be fetched: {reason}",
                     pin_label(&pin),
@@ -222,6 +227,18 @@ fn validate_pin_reachability(root: &Path, head: &str) -> Result<PinReport> {
     }
 
     Ok(report)
+}
+
+fn fetch_origin_once(
+    repo: &Path,
+    fetched: &mut HashSet<PathBuf>,
+) -> std::result::Result<(), String> {
+    if fetched.contains(repo) {
+        return Ok(());
+    }
+    fetch_origin(repo)?;
+    fetched.insert(repo.to_path_buf());
+    Ok(())
 }
 
 fn fetch_origin(repo: &Path) -> std::result::Result<(), String> {

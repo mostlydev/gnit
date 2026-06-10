@@ -133,9 +133,9 @@ fn command_requires_workspace_lock(command: &Commands) -> bool {
         | Commands::Doctor
         | Commands::Migrate
         | Commands::Pin { .. }
-        | Commands::Push { .. } => true,
+        | Commands::Push { .. }
+        | Commands::CiCheck { .. } => true,
         Commands::Clone { .. }
-        | Commands::CiCheck { .. }
         | Commands::Init { .. }
         | Commands::Status
         | Commands::Log

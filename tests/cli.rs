@@ -1530,6 +1530,54 @@ fn ci_check_rejects_member_commit_without_gnit_trailer() {
 }
 
 #[test]
+fn ci_check_exempts_merge_commits_from_trailer_requirement() {
+    let temp = tempdir_without_gnit_ancestor();
+    let repo = temp.path();
+    git_init(repo);
+    fs::write(repo.join("README.md"), "base\n").unwrap();
+    git(repo, ["add", "README.md"]);
+    git(repo, ["commit", "-m", "Initial"]);
+
+    git(repo, ["checkout", "-b", "feature"]);
+    fs::write(repo.join("feature.txt"), "with trailer\n").unwrap();
+    git(repo, ["add", "feature.txt"]);
+    git(
+        repo,
+        [
+            "commit",
+            "-m",
+            "Feature with trailer",
+            "-m",
+            "Gnit-Change-Id: GCH-1760000000000-72e5",
+        ],
+    );
+
+    git(repo, ["checkout", "master"]);
+    fs::write(repo.join("mainline.txt"), "mainline\n").unwrap();
+    git(repo, ["add", "mainline.txt"]);
+    git(repo, ["commit", "-m", "Mainline moves"]);
+
+    // GitHub's update-branch button: merge the base into the PR branch. The
+    // merge commit carries no trailer and must not fail the check.
+    git(repo, ["checkout", "feature"]);
+    git(
+        repo,
+        [
+            "merge",
+            "master",
+            "-m",
+            "Merge branch 'master' into feature",
+        ],
+    );
+
+    // CI passes the live base ref, so mainline commits are out of range and
+    // only the feature commit (trailered) and the merge commit remain.
+    gnit(repo, ["ci-check", "--base", "master", "--head", "HEAD"])
+        .success()
+        .stdout(predicate::str::contains("commit trailers: ok (1 checked)"));
+}
+
+#[test]
 fn ci_check_accepts_member_commit_with_valid_gnit_trailer() {
     let temp = tempdir_without_gnit_ancestor();
     let repo = temp.path();
