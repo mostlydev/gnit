@@ -1,7 +1,11 @@
 # Gnit
 
 Gnit is a Git-native workspace layer for changes that span multiple independent
-repositories.
+repositories. It replaces submodule bookkeeping (parent-pointer bumps, push
+ordering, detached-HEAD roulette) with three commands a human can remember —
+and it teaches agent harnesses the same workflow once, via a bundled skill and
+an `AGENTS.md` guidance block, so agents drive cross-repo change reliably
+instead of guessing at raw Git. Site: <https://mostlydev.github.io/gnit/>.
 
 The current design is in [docs/planning/gnit-design.md](docs/planning/gnit-design.md).
 It defines the v1 primitives:

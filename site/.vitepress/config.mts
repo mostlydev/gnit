@@ -17,6 +17,7 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Guide', link: '/guide/quickstart' },
+      { text: 'Agents', link: '/guide/agents' },
       { text: 'Design', link: '/guide/design' },
       { text: 'CLI', link: '/guide/cli' },
       { text: 'GitHub', link: 'https://github.com/mostlydev/gnit' },
@@ -30,6 +31,7 @@ export default defineConfig({
         items: [
           { text: 'Quickstart', link: '/guide/quickstart' },
           { text: 'Concepts', link: '/guide/concepts' },
+          { text: 'Agents', link: '/guide/agents' },
           { text: 'CLI', link: '/guide/cli' },
           { text: 'Design', link: '/guide/design' },
           { text: 'Implementation', link: '/guide/implementation' },
